@@ -167,6 +167,201 @@
   padding: 1.5rem;
 }
 
+.resource-workspace {
+  display: grid;
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  gap: 1rem;
+  min-height: 62vh;
+}
+
+.resource-list-pane,
+.detail-pane,
+.detail-surface {
+  border: 1px solid var(--border);
+  border-radius: 1.5rem;
+  background: var(--surface);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+}
+
+.resource-list-pane,
+.detail-pane {
+  padding: 1.25rem;
+}
+
+.resource-list-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.list-pane-header,
+.detail-header,
+.resource-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.list-count,
+.detail-subtitle {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.9rem;
+}
+
+.resource-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.resource-list-item {
+  display: block;
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.48);
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.resource-list-item:hover {
+  border-color: rgba(15, 118, 110, 0.36);
+}
+
+.resource-list-item.selected {
+  border-color: rgba(15, 118, 110, 0.5);
+  background: linear-gradient(135deg, rgba(240, 253, 250, 0.92), rgba(248, 250, 252, 0.92));
+  box-shadow: 0 16px 28px rgba(15, 118, 110, 0.08);
+}
+
+.resource-item-copy {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.resource-item-copy strong,
+.detail-header h3,
+.detail-surface h4 {
+  color: var(--text);
+}
+
+.resource-item-copy small,
+.resource-meta-line {
+  color: var(--muted);
+}
+
+.resource-meta-line {
+  display: block;
+  word-break: break-word;
+}
+
+.resource-list-item .pill {
+  font-size: 0.8rem;
+}
+
+.detail-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.detail-header {
+  align-items: end;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.detail-tabs {
+  display: inline-flex;
+  gap: 0.35rem;
+  width: fit-content;
+  padding: 0.35rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 1rem;
+  background: rgba(248, 250, 252, 0.75);
+}
+
+.detail-tab {
+  border: 0;
+  padding: 0.6rem 1rem;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.detail-tab:hover {
+  transform: none;
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.detail-tab.active {
+  background: var(--text);
+  color: #f8fafc;
+}
+
+.detail-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.detail-surface {
+  padding: 1.1rem;
+}
+
+.detail-surface h4 {
+  margin: 0 0 0.9rem;
+  font-size: 1rem;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem 1.25rem;
+  margin: 0;
+}
+
+.detail-grid dt {
+  margin-bottom: 0.25rem;
+  font-size: 0.74rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.detail-grid dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.detail-table-wrap {
+  overflow: auto;
+}
+
+.detail-table {
+  min-width: 0;
+}
+
+.inspect-surface,
+.log-surface {
+  overflow: hidden;
+  padding: 0;
+}
+
+.inspect-surface pre {
+  margin: 0;
+  padding: 1.4rem;
+  overflow: auto;
+  background: #07111b;
+  color: #dbeafe;
+  font-family: var(--mono);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
 .toolbar,
 .pull-form,
 .action-row {
@@ -403,6 +598,10 @@
     grid-template-columns: 1fr;
   }
 
+  .resource-workspace {
+    grid-template-columns: 1fr;
+  }
+
   .sidebar {
     position: relative;
     top: auto;
@@ -414,13 +613,28 @@
 
   .topbar,
   .hero-strip,
-  .viewer-toolbar {
+  .viewer-toolbar,
+  .detail-header,
+  .resource-list-item {
     flex-direction: column;
     align-items: stretch;
   }
 
   .table-shell {
     overflow-x: auto;
+  }
+
+  .detail-tabs {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .detail-tab {
+    flex: 1;
+  }
+
+  .detail-grid {
+    grid-template-columns: 1fr;
   }
 
   .resource-table {

@@ -13,18 +13,11 @@ import {
   listNetworks,
   listVolumes,
   pullImage,
-  removeContainer,
-  removeImage,
-  removeNetwork,
-  removeVolume,
-  restartContainer,
   startContainerLogStream,
   stopContainerLogStream,
-  startContainer,
-  stopContainer,
   containerLogs,
 } from './lib/api'
-import { formatBytes, formatDateTime, formatRelativeTime, shortenId } from './lib/format'
+import { formatBytes, formatDateTime, shortenId } from './lib/format'
 import type {
   ContainerSummary,
   DockerStatus,
@@ -36,12 +29,7 @@ import type {
 
 type ResourceKey = 'containers' | 'images' | 'volumes' | 'networks'
 
-type ActionState = {
-  title: string
-  body: string
-  mode: 'inspect' | 'logs'
-  containerId?: string
-} | null
+type DetailTab = 'info' | 'logs' | 'inspect'
 
 const resources: Array<{
   key: ResourceKey
@@ -57,7 +45,8 @@ const resources: Array<{
 function App() {
   const [resource, setResource] = useState<ResourceKey>('containers')
   const [search, setSearch] = useState('')
-  const [viewer, setViewer] = useState<ActionState>(null)
+  const [selectedResourceId, setSelectedResourceId] = useState('')
+  const [detailTab, setDetailTab] = useState<DetailTab>('info')
   const [pullTarget, setPullTarget] = useState('redis:7')
   const queryClient = useQueryClient()
 
@@ -111,42 +100,6 @@ function App() {
     onSuccess: refreshAll,
   })
 
-  const openInspect = async (title: string, request: () => Promise<InspectPayload>) => {
-    try {
-      const payload = await request()
-      setViewer({
-        title,
-        mode: 'inspect',
-        body: JSON.stringify(payload, null, 2),
-      })
-    } catch (error) {
-      setViewer({
-        title: 'Inspect failed',
-        mode: 'inspect',
-        body: error instanceof Error ? error.message : String(error),
-      })
-    }
-  }
-
-  const openLogs = async (container: ContainerSummary) => {
-    try {
-      const body = await containerLogs(container.id)
-      setViewer({
-        title: `${container.name} logs`,
-        mode: 'logs',
-        containerId: container.id,
-        body: body || 'No log output returned for this container.',
-      })
-    } catch (error) {
-      setViewer({
-        title: `${container.name} logs`,
-        mode: 'logs',
-        containerId: container.id,
-        body: error instanceof Error ? error.message : String(error),
-      })
-    }
-  }
-
   const counts = {
     containers: containersQuery.data?.length ?? 0,
     images: imagesQuery.data?.length ?? 0,
@@ -160,6 +113,37 @@ function App() {
     volumes: volumesQuery.data ?? [],
     networks: networksQuery.data ?? [],
   }
+
+  const filteredData = {
+    containers: filterContainers(currentData.containers, search),
+    images: filterImages(currentData.images, search),
+    volumes: filterVolumes(currentData.volumes, search),
+    networks: filterNetworks(currentData.networks, search),
+  }
+
+  const currentItems = filteredData[resource]
+  const selectedItem =
+    currentItems.find((item) => getResourceItemKey(resource, item) === selectedResourceId) ??
+    currentItems[0] ??
+    null
+  const effectiveSelectedId = selectedItem ? getResourceItemKey(resource, selectedItem) : ''
+
+  const detailQuery = useQuery({
+    queryKey: ['resource-inspect', resource, effectiveSelectedId],
+    enabled: Boolean(selectedItem),
+    queryFn: async () => {
+      switch (resource) {
+        case 'containers':
+          return inspectContainer((selectedItem as ContainerSummary).id)
+        case 'images':
+          return inspectImage((selectedItem as ImageSummary).id)
+        case 'volumes':
+          return inspectVolume((selectedItem as VolumeSummary).name)
+        case 'networks':
+          return inspectNetwork((selectedItem as NetworkSummary).id)
+      }
+    },
+  })
 
   const busy = actionMutation.isPending || pullMutation.isPending
   const currentStatus = statusQuery.data
@@ -178,13 +162,15 @@ function App() {
         <nav className="nav">
           {resources.map((item) => (
             <button
-              key={item.key}
-              type="button"
-              className={resource === item.key ? 'nav-item active' : 'nav-item'}
-              onClick={() => {
-                setResource(item.key)
-                setSearch('')
-              }}
+                key={item.key}
+                type="button"
+                className={resource === item.key ? 'nav-item active' : 'nav-item'}
+                onClick={() => {
+                  setResource(item.key)
+                  setSearch('')
+                  setSelectedResourceId('')
+                  setDetailTab('info')
+                }}
             >
               <span>
                 <strong>{item.label}</strong>
@@ -222,53 +208,61 @@ function App() {
 
         {resource === 'containers' && (
           <ContainersSection
-            items={filterContainers(currentData.containers, search)}
+            items={filteredData.containers}
             loading={containersQuery.isLoading}
-            busy={busy}
-            onAction={(job) => actionMutation.mutate(job)}
-            onInspect={(container) =>
-              void openInspect(`${container.name} inspect`, () => inspectContainer(container.id))
-            }
-            onLogs={(container) => void openLogs(container)}
+            selectedId={effectiveSelectedId}
+            selectedTab={detailTab}
+            inspectData={detailQuery.data}
+            inspectLoading={detailQuery.isLoading}
+            inspectError={detailQuery.error}
+            onSelect={setSelectedResourceId}
+            onSelectTab={setDetailTab}
           />
         )}
 
         {resource === 'images' && (
           <ImagesSection
-            items={filterImages(currentData.images, search)}
+            items={filteredData.images}
             loading={imagesQuery.isLoading}
             busy={busy}
+            selectedId={effectiveSelectedId}
+            selectedTab={detailTab}
+            inspectData={detailQuery.data}
+            inspectLoading={detailQuery.isLoading}
+            inspectError={detailQuery.error}
+            onSelect={setSelectedResourceId}
+            onSelectTab={setDetailTab}
             pullTarget={pullTarget}
             onPullTargetChange={setPullTarget}
             onPull={() => pullMutation.mutate(pullTarget)}
-            onAction={(job) => actionMutation.mutate(job)}
-            onInspect={(image) =>
-              void openInspect(image.primaryTag || shortenId(image.id), () => inspectImage(image.id))
-            }
           />
         )}
 
         {resource === 'volumes' && (
           <VolumesSection
-            items={filterVolumes(currentData.volumes, search)}
+            items={filteredData.volumes}
             loading={volumesQuery.isLoading}
-            busy={busy}
-            onAction={(job) => actionMutation.mutate(job)}
-            onInspect={(volume) =>
-              void openInspect(volume.name, () => inspectVolume(volume.name))
-            }
+            selectedId={effectiveSelectedId}
+            selectedTab={detailTab}
+            inspectData={detailQuery.data}
+            inspectLoading={detailQuery.isLoading}
+            inspectError={detailQuery.error}
+            onSelect={setSelectedResourceId}
+            onSelectTab={setDetailTab}
           />
         )}
 
         {resource === 'networks' && (
           <NetworksSection
-            items={filterNetworks(currentData.networks, search)}
+            items={filteredData.networks}
             loading={networksQuery.isLoading}
-            busy={busy}
-            onAction={(job) => actionMutation.mutate(job)}
-            onInspect={(network) =>
-              void openInspect(network.name, () => inspectNetwork(network.id))
-            }
+            selectedId={effectiveSelectedId}
+            selectedTab={detailTab}
+            inspectData={detailQuery.data}
+            inspectLoading={detailQuery.isLoading}
+            inspectError={detailQuery.error}
+            onSelect={setSelectedResourceId}
+            onSelectTab={setDetailTab}
           />
         )}
 
@@ -279,30 +273,6 @@ function App() {
         )}
       </main>
 
-      {viewer && (
-        <div className="viewer-backdrop" onClick={() => setViewer(null)}>
-          <section className="viewer" onClick={(event) => event.stopPropagation()}>
-            <header>
-              <div>
-                <p className="eyebrow">{viewer.mode === 'logs' ? 'Live Snapshot' : 'Inspect'}</p>
-                <h3>{viewer.title}</h3>
-              </div>
-              <button type="button" className="ghost" onClick={() => setViewer(null)}>
-                Close
-              </button>
-            </header>
-            {viewer.mode === 'logs' ? (
-              <LiveLogViewer
-                key={viewer.containerId ?? viewer.title}
-                initialBody={viewer.body}
-                containerId={viewer.containerId ?? ''}
-              />
-            ) : (
-              <pre>{viewer.body}</pre>
-            )}
-          </section>
-        </div>
-      )}
     </div>
   )
 }
@@ -336,84 +306,78 @@ function StatusPanel({ status, loading }: { status?: DockerStatus; loading: bool
 function ContainersSection({
   items,
   loading,
-  busy,
-  onAction,
-  onInspect,
-  onLogs,
+  selectedId,
+  selectedTab,
+  inspectData,
+  inspectLoading,
+  inspectError,
+  onSelect,
+  onSelectTab,
 }: {
   items: ContainerSummary[]
   loading: boolean
-  busy: boolean
-  onAction: (job: () => Promise<void>) => void
-  onInspect: (item: ContainerSummary) => void
-  onLogs: (item: ContainerSummary) => void
+  selectedId: string
+  selectedTab: DetailTab
+  inspectData?: InspectPayload
+  inspectLoading: boolean
+  inspectError: unknown
+  onSelect: (id: string) => void
+  onSelectTab: (tab: DetailTab) => void
 }) {
   if (loading) return <StatePanel title="Loading containers" copy="Collecting runtime inventory." />
   if (!items.length) return <StatePanel title="No containers" copy="Start a workload and it will show up here." />
 
+  const selected = items.find((item) => item.id === selectedId) ?? items[0]
+
   return (
-    <TableShell>
-      <table className="resource-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Image</th>
-            <th>State</th>
-            <th>Status</th>
-            <th>Ports</th>
-            <th>Created</th>
-            <th>ID</th>
-            <th className="actions-col">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => {
-            const running = item.state === 'running'
-            return (
-              <tr key={item.id}>
-                <td>
-                  <div className="primary-cell">
-                    <strong>{item.name}</strong>
+    <ResourceWorkspace
+      list={
+        <section className="resource-list-pane">
+          <div className="list-pane-header">
+            <div>
+              <p className="eyebrow">Runtime inventory</p>
+              <h3>Containers</h3>
+            </div>
+            <span className="list-count">{items.length}</span>
+          </div>
+          <div className="resource-list">
+            {items.map((item) => {
+              const running = item.state === 'running'
+              return (
+                <article
+                  key={item.id}
+                  className={item.id === selected.id ? 'resource-list-item selected' : 'resource-list-item'}
+                  onClick={() => {
+                    onSelect(item.id)
+                    onSelectTab('info')
+                  }}
+                >
+                  <div className="resource-item-copy">
+                    <div className="resource-item-head">
+                      <strong>{item.name}</strong>
+                      <span className={running ? 'pill success' : 'pill muted'}>{item.state}</span>
+                    </div>
+                    <small>{item.image}</small>
+                    <span className="resource-meta-line">{item.status}</span>
+                    <span className="resource-meta-line">{item.ports.length ? item.ports.join(', ') : 'No published ports'}</span>
                   </div>
-                </td>
-                <td className="wrap-cell">{item.image}</td>
-                <td>
-                  <span className={running ? 'pill success' : 'pill muted'}>{item.state}</span>
-                </td>
-                <td>{item.status}</td>
-                <td className="wrap-cell">{item.ports.length ? item.ports.join(', ') : 'None'}</td>
-                <td>{formatRelativeTime(item.created)}</td>
-                <td>
-                  <code>{shortenId(item.id)}</code>
-                </td>
-                <td>
-                  <div className="action-row compact">
-                    <ActionIconButton label="Start" disabled={busy || running} onClick={() => onAction(() => startContainer(item.id))}>
-                      <PlayIcon />
-                    </ActionIconButton>
-                    <ActionIconButton label="Stop" disabled={busy || !running} onClick={() => onAction(() => stopContainer(item.id))}>
-                      <StopIcon />
-                    </ActionIconButton>
-                    <ActionIconButton label="Restart" disabled={busy} onClick={() => onAction(() => restartContainer(item.id))}>
-                      <RestartIcon />
-                    </ActionIconButton>
-                    <ActionIconButton label="Logs" tone="ghost" disabled={busy} onClick={() => onLogs(item)}>
-                      <LogsIcon />
-                    </ActionIconButton>
-                    <ActionIconButton label="Inspect" tone="ghost" disabled={busy} onClick={() => onInspect(item)}>
-                      <InspectIcon />
-                    </ActionIconButton>
-                    <ActionIconButton label="Remove" tone="danger" disabled={busy} onClick={() => onAction(() => removeContainer(item.id))}>
-                      <TrashIcon />
-                    </ActionIconButton>
-                  </div>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </TableShell>
+                </article>
+              )
+            })}
+          </div>
+        </section>
+      }
+      detail={
+        <ContainerDetailPane
+          item={selected}
+          selectedTab={selectedTab}
+          inspectData={inspectData}
+          inspectLoading={inspectLoading}
+          inspectError={inspectError}
+          onSelectTab={onSelectTab}
+        />
+      }
+    />
   )
 }
 
@@ -421,20 +385,30 @@ function ImagesSection({
   items,
   loading,
   busy,
+  selectedId,
+  selectedTab,
+  inspectData,
+  inspectLoading,
+  inspectError,
+  onSelect,
+  onSelectTab,
   pullTarget,
   onPullTargetChange,
   onPull,
-  onAction,
-  onInspect,
 }: {
   items: ImageSummary[]
   loading: boolean
   busy: boolean
+  selectedId: string
+  selectedTab: DetailTab
+  inspectData?: InspectPayload
+  inspectLoading: boolean
+  inspectError: unknown
+  onSelect: (id: string) => void
+  onSelectTab: (tab: DetailTab) => void
   pullTarget: string
   onPullTargetChange: (value: string) => void
   onPull: () => void
-  onAction: (job: () => Promise<void>) => void
-  onInspect: (item: ImageSummary) => void
 }) {
   return (
     <>
@@ -456,51 +430,51 @@ function ImagesSection({
       ) : !items.length ? (
         <StatePanel title="No images" copy="Pull or build something and it will appear here." />
       ) : (
-        <TableShell>
-          <table className="resource-table">
-            <thead>
-              <tr>
-                <th>Primary tag</th>
-                <th>Tags</th>
-                <th>Size</th>
-                <th>Created</th>
-                <th>Refs</th>
-                <th>ID</th>
-                <th className="actions-col">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id}>
-                  <td>
-                    <div className="primary-cell">
+        <ResourceWorkspace
+          list={
+            <section className="resource-list-pane">
+              <div className="list-pane-header">
+                <div>
+                  <p className="eyebrow">Image cache</p>
+                  <h3>Images</h3>
+                </div>
+                <span className="list-count">{items.length}</span>
+              </div>
+              <div className="resource-list">
+                {items.map((item) => (
+                  <article
+                    key={item.id}
+                    className={item.id === (selectedId || items[0]?.id) ? 'resource-list-item selected' : 'resource-list-item'}
+                    onClick={() => {
+                      onSelect(item.id)
+                      onSelectTab('info')
+                    }}
+                  >
+                    <div className="resource-item-copy">
+                    <div className="resource-item-head">
                       <strong>{item.primaryTag || '<untagged>'}</strong>
+                      <span className="pill info">{item.containers} refs</span>
                     </div>
-                  </td>
-                  <td className="wrap-cell">{item.tags.join(', ') || 'None'}</td>
-                  <td>{formatBytes(item.size)}</td>
-                  <td>{formatDateTime(item.created)}</td>
-                  <td>
-                    <span className="pill info">{item.containers} refs</span>
-                  </td>
-                  <td>
-                    <code>{shortenId(item.id)}</code>
-                  </td>
-                  <td>
-                    <div className="action-row compact">
-                      <ActionIconButton label="Inspect" tone="ghost" onClick={() => onInspect(item)}>
-                        <InspectIcon />
-                      </ActionIconButton>
-                      <ActionIconButton label="Remove" tone="danger" disabled={busy} onClick={() => onAction(() => removeImage(item.id))}>
-                        <TrashIcon />
-                      </ActionIconButton>
-                    </div>
-                  </td>
-                </tr>
+                    <small>{shortenId(item.id)}</small>
+                    <span className="resource-meta-line">{item.tags[1] ?? item.tags[0] ?? 'No tags'}</span>
+                    <span className="resource-meta-line">{formatBytes(item.size)} • {formatDateTime(item.created)}</span>
+                  </div>
+                </article>
               ))}
-            </tbody>
-          </table>
-        </TableShell>
+              </div>
+            </section>
+          }
+          detail={
+            <ImageDetailPane
+              item={items.find((item) => item.id === selectedId) ?? items[0]}
+              selectedTab={selectedTab}
+              inspectData={inspectData}
+              inspectLoading={inspectLoading}
+              inspectError={inspectError}
+              onSelectTab={onSelectTab}
+            />
+          }
+        />
       )}
     </>
   )
@@ -509,131 +483,467 @@ function ImagesSection({
 function VolumesSection({
   items,
   loading,
-  busy,
-  onAction,
-  onInspect,
+  selectedId,
+  selectedTab,
+  inspectData,
+  inspectLoading,
+  inspectError,
+  onSelect,
+  onSelectTab,
 }: {
   items: VolumeSummary[]
   loading: boolean
-  busy: boolean
-  onAction: (job: () => Promise<void>) => void
-  onInspect: (item: VolumeSummary) => void
+  selectedId: string
+  selectedTab: DetailTab
+  inspectData?: InspectPayload
+  inspectLoading: boolean
+  inspectError: unknown
+  onSelect: (id: string) => void
+  onSelectTab: (tab: DetailTab) => void
 }) {
   if (loading) return <StatePanel title="Loading volumes" copy="Checking persistent storage." />
   if (!items.length) return <StatePanel title="No volumes" copy="Create a named volume and it will show here." />
 
   return (
-    <TableShell>
-      <table className="resource-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Driver</th>
-            <th>Scope</th>
-            <th>Mountpoint</th>
-            <th>Created</th>
-            <th className="actions-col">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr key={item.name}>
-              <td>
-                <div className="primary-cell">
-                  <strong>{item.name}</strong>
+    <ResourceWorkspace
+      list={
+        <section className="resource-list-pane">
+          <div className="list-pane-header">
+            <div>
+              <p className="eyebrow">Persistent storage</p>
+              <h3>Volumes</h3>
+            </div>
+            <span className="list-count">{items.length}</span>
+          </div>
+          <div className="resource-list">
+            {items.map((item) => (
+              <article
+                key={item.name}
+                className={item.name === (selectedId || items[0]?.name) ? 'resource-list-item selected' : 'resource-list-item'}
+                onClick={() => {
+                  onSelect(item.name)
+                  onSelectTab('info')
+                }}
+              >
+                <div className="resource-item-copy">
+                  <div className="resource-item-head">
+                    <strong>{item.name}</strong>
+                    <span className="pill info">{item.scope}</span>
+                  </div>
+                  <small>{item.driver}</small>
+                  <span className="resource-meta-line">{item.mountpoint || 'Unknown mountpoint'}</span>
+                  <span className="resource-meta-line">{item.createdAt || 'Unknown creation time'}</span>
                 </div>
-              </td>
-              <td>{item.driver}</td>
-              <td>
-                <span className="pill info">{item.scope}</span>
-              </td>
-              <td className="wrap-cell">{item.mountpoint || 'Unknown'}</td>
-              <td>{item.createdAt || 'Unknown'}</td>
-              <td>
-                <div className="action-row compact">
-                  <ActionIconButton label="Inspect" tone="ghost" onClick={() => onInspect(item)}>
-                    <InspectIcon />
-                  </ActionIconButton>
-                  <ActionIconButton label="Remove" tone="danger" disabled={busy} onClick={() => onAction(() => removeVolume(item.name))}>
-                    <TrashIcon />
-                  </ActionIconButton>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </TableShell>
+              </article>
+            ))}
+          </div>
+        </section>
+      }
+      detail={
+        <VolumeDetailPane
+          item={items.find((item) => item.name === selectedId) ?? items[0]}
+          selectedTab={selectedTab}
+          inspectData={inspectData}
+          inspectLoading={inspectLoading}
+          inspectError={inspectError}
+          onSelectTab={onSelectTab}
+        />
+      }
+    />
   )
 }
 
 function NetworksSection({
   items,
   loading,
-  busy,
-  onAction,
-  onInspect,
+  selectedId,
+  selectedTab,
+  inspectData,
+  inspectLoading,
+  inspectError,
+  onSelect,
+  onSelectTab,
 }: {
   items: NetworkSummary[]
   loading: boolean
-  busy: boolean
-  onAction: (job: () => Promise<void>) => void
-  onInspect: (item: NetworkSummary) => void
+  selectedId: string
+  selectedTab: DetailTab
+  inspectData?: InspectPayload
+  inspectLoading: boolean
+  inspectError: unknown
+  onSelect: (id: string) => void
+  onSelectTab: (tab: DetailTab) => void
 }) {
   if (loading) return <StatePanel title="Loading networks" copy="Mapping local network bridges." />
   if (!items.length) return <StatePanel title="No networks" copy="Docker will list networks here once available." />
 
   return (
-    <TableShell>
-      <table className="resource-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Driver</th>
-            <th>Scope</th>
-            <th>Flags</th>
-            <th>Created</th>
-            <th>ID</th>
-            <th className="actions-col">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr key={item.id}>
-              <td>
-                <div className="primary-cell">
-                  <strong>{item.name}</strong>
+    <ResourceWorkspace
+      list={
+        <section className="resource-list-pane">
+          <div className="list-pane-header">
+            <div>
+              <p className="eyebrow">Connectivity fabric</p>
+              <h3>Networks</h3>
+            </div>
+            <span className="list-count">{items.length}</span>
+          </div>
+          <div className="resource-list">
+            {items.map((item) => (
+              <article
+                key={item.id}
+                className={item.id === (selectedId || items[0]?.id) ? 'resource-list-item selected' : 'resource-list-item'}
+                onClick={() => {
+                  onSelect(item.id)
+                  onSelectTab('info')
+                }}
+              >
+                <div className="resource-item-copy">
+                  <div className="resource-item-head">
+                    <strong>{item.name}</strong>
+                    <span className="pill info">{item.driver}</span>
+                  </div>
+                  <small>{shortenId(item.id)}</small>
+                  <span className="resource-meta-line">{item.scope} • {networkFlags(item)}</span>
+                  <span className="resource-meta-line">{item.created || 'Unknown creation time'}</span>
                 </div>
-              </td>
-              <td>
-                <span className="pill info">{item.driver}</span>
-              </td>
-              <td>{item.scope}</td>
-              <td>{networkFlags(item)}</td>
-              <td>{item.created || 'Unknown'}</td>
-              <td>
-                <code>{shortenId(item.id)}</code>
-              </td>
-              <td>
-                <div className="action-row compact">
-                  <ActionIconButton label="Inspect" tone="ghost" onClick={() => onInspect(item)}>
-                    <InspectIcon />
-                  </ActionIconButton>
-                  <ActionIconButton label="Remove" tone="danger" disabled={busy} onClick={() => onAction(() => removeNetwork(item.id))}>
-                    <TrashIcon />
-                  </ActionIconButton>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </TableShell>
+              </article>
+            ))}
+          </div>
+        </section>
+      }
+      detail={
+        <NetworkDetailPane
+          item={items.find((item) => item.id === selectedId) ?? items[0]}
+          selectedTab={selectedTab}
+          inspectData={inspectData}
+          inspectLoading={inspectLoading}
+          inspectError={inspectError}
+          onSelectTab={onSelectTab}
+        />
+      }
+    />
   )
 }
 
-function TableShell({ children }: { children: ReactNode }) {
-  return <section className="table-shell">{children}</section>
+function ResourceWorkspace({ list, detail }: { list: ReactNode; detail: ReactNode }) {
+  return (
+    <section className="resource-workspace">
+      {list}
+      <section className="detail-pane">{detail}</section>
+    </section>
+  )
+}
+
+function ContainerDetailPane({
+  item,
+  selectedTab,
+  inspectData,
+  inspectLoading,
+  inspectError,
+  onSelectTab,
+}: {
+  item: ContainerSummary
+  selectedTab: DetailTab
+  inspectData?: InspectPayload
+  inspectLoading: boolean
+  inspectError: unknown
+  onSelectTab: (tab: DetailTab) => void
+}) {
+  const logsQuery = useQuery({
+    queryKey: ['container-logs', item.id],
+    queryFn: () => containerLogs(item.id),
+    enabled: selectedTab === 'logs',
+  })
+  const inspect = asRecord(inspectData)
+  const config = asRecord(inspect.Config)
+  const state = asRecord(inspect.State)
+  const networkSettings = asRecord(inspect.NetworkSettings)
+  const mounts = asArray(inspect.Mounts)
+  const labels = entriesOf(asRecord(config.Labels))
+
+  return (
+    <>
+      <DetailHeader title={item.name} subtitle={item.image} />
+      <DetailTabs
+        tabs={[
+          { key: 'info', label: 'Info' },
+          { key: 'logs', label: 'Logs' },
+          { key: 'inspect', label: 'Inspect' },
+        ]}
+        selectedTab={selectedTab}
+        onSelect={onSelectTab}
+      />
+      {selectedTab === 'logs' ? (
+        logsQuery.isLoading ? (
+          <StatePanel title="Loading logs" copy="Collecting the latest container output." />
+        ) : (
+          <section className="detail-surface log-surface">
+            <LiveLogViewer containerId={item.id} initialBody={logsQuery.data || 'No log output returned for this container.'} />
+          </section>
+        )
+      ) : selectedTab === 'inspect' ? (
+        <InspectPanel data={inspectData} loading={inspectLoading} error={inspectError} />
+      ) : (
+        <div className="detail-stack">
+          <KeyValueSection
+            title="Overview"
+            rows={[
+              ['Name', item.name],
+              ['ID', shortenId(item.id)],
+              ['Image', item.image],
+              ['State', item.state],
+              ['Status', item.status],
+              ['Created', formatDateTime(item.created)],
+              ['Platform', readString(inspect.Platform)],
+              ['IP address', readPrimaryIp(networkSettings)],
+            ]}
+          />
+          <SimpleTableSection
+            title="Port forwards"
+            columns={['Published']}
+            rows={(item.ports.length ? item.ports : ['No published ports']).map((port) => [port])}
+          />
+          <SimpleTableSection
+            title="Mounts"
+            columns={['Source', 'Destination', 'Mode']}
+            rows={
+              mounts.length
+                ? mounts.map((mount) => {
+                    const record = asRecord(mount)
+                    return [readString(record.Source), readString(record.Destination), readString(record.Mode)]
+                  })
+                : [['No mounts', '', '']]
+            }
+          />
+          <SimpleTableSection
+            title="Labels"
+            columns={['Key', 'Value']}
+            rows={labels.length ? labels : [['No labels', '']]}
+          />
+          {state.Health ? (
+            <KeyValueSection
+              title="Health"
+              rows={[
+                ['Status', readString(asRecord(state.Health).Status)],
+                ['Failing streak', String(asRecord(state.Health).FailingStreak ?? '--')],
+              ]}
+            />
+          ) : null}
+        </div>
+      )}
+    </>
+  )
+}
+
+function ImageDetailPane({ item, selectedTab, inspectData, inspectLoading, inspectError, onSelectTab }: {
+  item: ImageSummary
+  selectedTab: DetailTab
+  inspectData?: InspectPayload
+  inspectLoading: boolean
+  inspectError: unknown
+  onSelectTab: (tab: DetailTab) => void
+}) {
+  const inspect = asRecord(inspectData)
+  const config = asRecord(inspect.Config)
+  const labels = entriesOf(asRecord(config.Labels))
+  const repoDigests = readStringArray(inspect.RepoDigests)
+
+  return (
+    <>
+      <DetailHeader title={item.primaryTag || '<untagged>'} subtitle={shortenId(item.id)} />
+      <DetailTabs tabs={[{ key: 'info', label: 'Info' }, { key: 'inspect', label: 'Inspect' }]} selectedTab={selectedTab === 'logs' ? 'info' : selectedTab} onSelect={onSelectTab} />
+      {selectedTab === 'inspect' ? (
+        <InspectPanel data={inspectData} loading={inspectLoading} error={inspectError} />
+      ) : (
+        <div className="detail-stack">
+          <KeyValueSection
+            title="Overview"
+            rows={[
+              ['Primary tag', item.primaryTag || '<untagged>'],
+              ['ID', shortenId(item.id)],
+              ['Size', formatBytes(item.size)],
+              ['Created', formatDateTime(item.created)],
+              ['Containers', String(item.containers)],
+              ['Architecture', readString(inspect.Architecture)],
+              ['OS', readString(inspect.Os)],
+            ]}
+          />
+          <SimpleTableSection title="Tags" columns={['Tag']} rows={(item.tags.length ? item.tags : ['No tags']).map((tag) => [tag])} />
+          <SimpleTableSection title="Repo digests" columns={['Digest']} rows={(repoDigests.length ? repoDigests : ['No repo digests']).map((digest) => [digest])} />
+          <SimpleTableSection title="Labels" columns={['Key', 'Value']} rows={labels.length ? labels : [['No labels', '']]} />
+        </div>
+      )}
+    </>
+  )
+}
+
+function VolumeDetailPane({ item, selectedTab, inspectData, inspectLoading, inspectError, onSelectTab }: {
+  item: VolumeSummary
+  selectedTab: DetailTab
+  inspectData?: InspectPayload
+  inspectLoading: boolean
+  inspectError: unknown
+  onSelectTab: (tab: DetailTab) => void
+}) {
+  const inspect = asRecord(inspectData)
+  const labels = entriesOf(asRecord(inspect.Labels))
+  const options = entriesOf(asRecord(inspect.Options))
+
+  return (
+    <>
+      <DetailHeader title={item.name} subtitle={item.driver} />
+      <DetailTabs tabs={[{ key: 'info', label: 'Info' }, { key: 'inspect', label: 'Inspect' }]} selectedTab={selectedTab === 'logs' ? 'info' : selectedTab} onSelect={onSelectTab} />
+      {selectedTab === 'inspect' ? (
+        <InspectPanel data={inspectData} loading={inspectLoading} error={inspectError} />
+      ) : (
+        <div className="detail-stack">
+          <KeyValueSection
+            title="Overview"
+            rows={[
+              ['Name', item.name],
+              ['Driver', item.driver],
+              ['Scope', item.scope],
+              ['Mountpoint', item.mountpoint || readString(inspect.Mountpoint)],
+              ['Created', item.createdAt || readString(inspect.CreatedAt)],
+            ]}
+          />
+          <SimpleTableSection title="Options" columns={['Key', 'Value']} rows={options.length ? options : [['No options', '']]} />
+          <SimpleTableSection title="Labels" columns={['Key', 'Value']} rows={labels.length ? labels : [['No labels', '']]} />
+        </div>
+      )}
+    </>
+  )
+}
+
+function NetworkDetailPane({ item, selectedTab, inspectData, inspectLoading, inspectError, onSelectTab }: {
+  item: NetworkSummary
+  selectedTab: DetailTab
+  inspectData?: InspectPayload
+  inspectLoading: boolean
+  inspectError: unknown
+  onSelectTab: (tab: DetailTab) => void
+}) {
+  const inspect = asRecord(inspectData)
+  const ipam = asRecord(inspect.IPAM)
+  const ipamConfig = asArray(ipam.Config)
+  const labels = entriesOf(asRecord(inspect.Labels))
+
+  return (
+    <>
+      <DetailHeader title={item.name} subtitle={shortenId(item.id)} />
+      <DetailTabs tabs={[{ key: 'info', label: 'Info' }, { key: 'inspect', label: 'Inspect' }]} selectedTab={selectedTab === 'logs' ? 'info' : selectedTab} onSelect={onSelectTab} />
+      {selectedTab === 'inspect' ? (
+        <InspectPanel data={inspectData} loading={inspectLoading} error={inspectError} />
+      ) : (
+        <div className="detail-stack">
+          <KeyValueSection
+            title="Overview"
+            rows={[
+              ['Name', item.name],
+              ['ID', shortenId(item.id)],
+              ['Driver', item.driver],
+              ['Scope', item.scope],
+              ['Flags', networkFlags(item)],
+              ['Created', item.created || readString(inspect.Created)],
+            ]}
+          />
+          <SimpleTableSection
+            title="IPAM"
+            columns={['Subnet', 'Gateway', 'Range']}
+            rows={
+              ipamConfig.length
+                ? ipamConfig.map((entry) => {
+                    const record = asRecord(entry)
+                    return [readString(record.Subnet), readString(record.Gateway), readString(record.IPRange)]
+                  })
+                : [['No IPAM config', '', '']]
+            }
+          />
+          <SimpleTableSection title="Labels" columns={['Key', 'Value']} rows={labels.length ? labels : [['No labels', '']]} />
+        </div>
+      )}
+    </>
+  )
+}
+
+function DetailHeader({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <header className="detail-header">
+      <div>
+        <p className="eyebrow">Selected resource</p>
+        <h3>{title}</h3>
+      </div>
+      <span className="detail-subtitle">{subtitle}</span>
+    </header>
+  )
+}
+
+function DetailTabs({ tabs, selectedTab, onSelect }: { tabs: Array<{ key: DetailTab; label: string }>; selectedTab: DetailTab; onSelect: (tab: DetailTab) => void }) {
+  return (
+    <div className="detail-tabs">
+      {tabs.map((tab) => (
+        <button key={tab.key} type="button" className={tab.key === selectedTab ? 'detail-tab active' : 'detail-tab'} onClick={() => onSelect(tab.key)}>
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function KeyValueSection({ title, rows }: { title: string; rows: Array<[string, string]> }) {
+  return (
+    <section className="detail-surface">
+      <h4>{title}</h4>
+      <dl className="detail-grid">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value || '--'}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  )
+}
+
+function SimpleTableSection({ title, columns, rows }: { title: string; columns: string[]; rows: string[][] }) {
+  return (
+    <section className="detail-surface">
+      <h4>{title}</h4>
+      <div className="detail-table-wrap">
+        <table className="resource-table detail-table">
+          <thead>
+            <tr>
+              {columns.map((column) => (
+                <th key={column}>{column}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={`${title}-${index}`}>
+                {row.map((cell, cellIndex) => (
+                  <td key={`${title}-${index}-${cellIndex}`}>{cell || '--'}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
+function InspectPanel({ data, loading, error }: { data?: InspectPayload; loading: boolean; error: unknown }) {
+  if (loading) return <StatePanel title="Loading inspect data" copy="Reading the full resource payload." />
+  if (error) return <StatePanel title="Inspect failed" copy={String(error)} />
+
+  return (
+    <section className="detail-surface inspect-surface">
+      <pre>{JSON.stringify(data ?? {}, null, 2)}</pre>
+    </section>
+  )
 }
 
 function LiveLogViewer({
@@ -796,34 +1106,20 @@ function ActionIconButton({
   const className = ['icon-button', tone && tone !== 'default' ? tone : ''].filter(Boolean).join(' ')
 
   return (
-    <button type="button" className={className} aria-label={label} title={label} disabled={disabled} onClick={onClick}>
+    <button
+      type="button"
+      className={className}
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={(event) => {
+        event.stopPropagation()
+        onClick()
+      }}
+    >
       {children}
     </button>
   )
-}
-
-function PlayIcon() {
-  return <IconFrame path="M8 6.5v11l9-5.5-9-5.5Z" />
-}
-
-function StopIcon() {
-  return <IconFrame path="M7 7h10v10H7z" />
-}
-
-function RestartIcon() {
-  return <IconFrame path="M16.5 8.5A5.5 5.5 0 1 0 17 15M16.5 8.5V5M16.5 8.5H13" />
-}
-
-function LogsIcon() {
-  return <IconFrame path="M6 8h12M6 12h12M6 16h8" />
-}
-
-function InspectIcon() {
-  return <IconFrame path="M11 7a6 6 0 1 0 0 12a6 6 0 0 0 0-12Zm0 0v-2M16 16l3 3" />
-}
-
-function TrashIcon() {
-  return <IconFrame path="M8 8h8M9 8V6h6v2M9 10v7M12 10v7M15 10v7M7 8l1 10h8l1-10" />
 }
 
 function PauseIcon() {
@@ -898,6 +1194,61 @@ function networkFlags(item: NetworkSummary) {
   if (item.internal) flags.push('internal')
   if (item.attachable) flags.push('attachable')
   return flags.length ? flags.join(', ') : 'default'
+}
+
+function getResourceItemKey(
+  resource: ResourceKey,
+  item: ContainerSummary | ImageSummary | VolumeSummary | NetworkSummary,
+) {
+  switch (resource) {
+    case 'containers':
+      return (item as ContainerSummary).id
+    case 'images':
+      return (item as ImageSummary).id
+    case 'volumes':
+      return (item as VolumeSummary).name
+    case 'networks':
+      return (item as NetworkSummary).id
+  }
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : []
+}
+
+function readString(value: unknown) {
+  if (value === null || value === undefined || value === '') return '--'
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return JSON.stringify(value)
+}
+
+function readStringArray(value: unknown) {
+  return asArray(value).map((entry) => readString(entry)).filter((entry) => entry !== '--')
+}
+
+function entriesOf(record: Record<string, unknown>) {
+  return Object.entries(record).map(([key, value]) => [key, readString(value)] as [string, string])
+}
+
+function readPrimaryIp(networkSettings: Record<string, unknown>) {
+  if (typeof networkSettings.IPAddress === 'string' && networkSettings.IPAddress) {
+    return networkSettings.IPAddress
+  }
+
+  const networks = asRecord(networkSettings.Networks)
+  for (const network of Object.values(networks)) {
+    const ip = asRecord(network).IPAddress
+    if (typeof ip === 'string' && ip) return ip
+  }
+
+  return '--'
 }
 
 export default App
