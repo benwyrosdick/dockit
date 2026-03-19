@@ -1,7 +1,8 @@
 .shell {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .sidebar {
@@ -18,6 +19,7 @@
     radial-gradient(circle at top left, rgba(96, 165, 250, 0.18), transparent 36%),
     linear-gradient(180deg, rgba(10, 20, 30, 0.94), rgba(10, 20, 30, 0.88));
   color: #eef6fb;
+  overflow-y: auto;
 }
 
 .sidebar h1,
@@ -144,7 +146,9 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  min-height: 0;
   padding: 2rem;
+  overflow: hidden;
 }
 
 .topbar,
@@ -171,7 +175,8 @@
   display: grid;
   grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
   gap: 1rem;
-  min-height: 62vh;
+  min-height: 0;
+  flex: 1;
 }
 
 .resource-list-pane,
@@ -192,6 +197,8 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .list-pane-header,
@@ -213,6 +220,9 @@
 .resource-list {
   display: grid;
   gap: 0.75rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.25rem;
 }
 
 .resource-list-item {
@@ -266,6 +276,8 @@
   flex-direction: column;
   gap: 1rem;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .detail-header {
@@ -306,6 +318,9 @@
 .detail-stack {
   display: grid;
   gap: 1rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.25rem;
 }
 
 .detail-surface {
@@ -347,11 +362,18 @@
 
 .inspect-surface,
 .log-surface {
+  display: flex;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
   padding: 0;
 }
 
-.inspect-surface pre {
+.inspect-surface pre,
+.live-log-viewer pre,
+.viewer pre {
+  flex: 1;
+  min-height: 0;
   margin: 0;
   padding: 1.4rem;
   overflow: auto;
@@ -360,6 +382,14 @@
   font-family: var(--mono);
   font-size: 0.92rem;
   line-height: 1.6;
+}
+
+.live-log-viewer {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .toolbar,
@@ -567,18 +597,6 @@
   color: var(--danger);
 }
 
-.viewer pre {
-  margin: 0;
-  padding: 1.5rem;
-  overflow: auto;
-  flex: 1;
-  background: #07111b;
-  color: #dbeafe;
-  font-family: var(--mono);
-  font-size: 0.92rem;
-  line-height: 1.6;
-}
-
 .error-banner {
   padding: 1rem 1.2rem;
   color: #991b1b;
@@ -596,6 +614,8 @@
 @media (max-width: 1080px) {
   .shell {
     grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
   }
 
   .resource-workspace {
@@ -609,6 +629,14 @@
     min-height: auto;
     border-right: 0;
     border-bottom: 1px solid var(--border);
+    overflow: visible;
+  }
+
+  .main-panel,
+  .resource-list-pane,
+  .resource-list,
+  .detail-pane {
+    overflow: visible;
   }
 
   .topbar,

@@ -1059,7 +1059,7 @@ function LiveLogViewer({
   }
 
   return (
-    <>
+    <section className="live-log-viewer">
       <div className="viewer-toolbar">
         <div className="viewer-status">
           <span className={isFollowing ? 'status-dot online' : 'status-dot paused'} />
@@ -1086,7 +1086,7 @@ function LiveLogViewer({
         </div>
       </div>
       <pre ref={logRef} onScroll={handleScroll}>{body}</pre>
-    </>
+    </section>
   )
 }
 
