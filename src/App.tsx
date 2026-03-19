@@ -152,11 +152,7 @@ function App() {
     <div className="shell">
       <aside className="sidebar">
         <div>
-          <p className="eyebrow">Wayland Docker Desktop</p>
           <h1>Dockit</h1>
-          <p className="lede">
-            A local-first control room for your engine, resources, and logs.
-          </p>
         </div>
 
         <nav className="nav">
@@ -174,7 +170,6 @@ function App() {
             >
               <span>
                 <strong>{item.label}</strong>
-                <small>{item.caption}</small>
               </span>
               <span className="nav-count">{counts[item.key]}</span>
             </button>
@@ -357,8 +352,7 @@ function ContainersSection({
                       <span className={running ? 'pill success' : 'pill muted'}>{item.state}</span>
                     </div>
                     <small>{item.image}</small>
-                    <span className="resource-meta-line">{item.status}</span>
-                    <span className="resource-meta-line">{item.ports.length ? item.ports.join(', ') : 'No published ports'}</span>
+                    <span className="resource-meta-line uptime-line">{item.status}</span>
                   </div>
                 </article>
               )
