@@ -385,10 +385,10 @@
 }
 
 .live-log-viewer {
-  display: flex;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   flex: 1;
   min-height: 0;
-  flex-direction: column;
   overflow: hidden;
 }
 
@@ -582,6 +582,29 @@
   color: var(--text);
 }
 
+.viewer-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.log-filter {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.log-filter span {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.log-filter input {
+  min-width: 14rem;
+}
+
 .viewer-mode {
   padding: 0.18rem 0.55rem;
   border-radius: 999px;
@@ -642,6 +665,7 @@
   .topbar,
   .hero-strip,
   .viewer-toolbar,
+  .viewer-controls,
   .detail-header,
   .resource-list-item {
     flex-direction: column;

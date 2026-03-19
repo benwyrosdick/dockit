@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { listen } from '@tauri-apps/api/event'
 import './App.css'
@@ -193,7 +193,6 @@ function App() {
 
           <div className="toolbar">
             <label className="search">
-              <span>Search</span>
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
@@ -956,10 +955,12 @@ function LiveLogViewer({
   const [body, setBody] = useState(initialBody)
   const [isFollowing, setIsFollowing] = useState(true)
   const [copyLabel, setCopyLabel] = useState<'copy' | 'copied'>('copy')
+  const [filter, setFilter] = useState('')
   const [streamError, setStreamError] = useState<string | null>(null)
   const [transportLabel, setTransportLabel] = useState<'stream' | 'fallback'>('stream')
   const logRef = useRef<HTMLPreElement | null>(null)
   const lastStreamAtRef = useRef(0)
+  const filteredBody = useMemo(() => filterLogBody(body, filter), [body, filter])
 
   useEffect(() => {
     if (!containerId) return
@@ -1032,7 +1033,7 @@ function LiveLogViewer({
     const element = logRef.current
     if (!element || !isFollowing) return
     element.scrollTop = element.scrollHeight
-  }, [body, isFollowing])
+  }, [filteredBody, isFollowing])
 
   const handleScroll = () => {
     const element = logRef.current
@@ -1053,7 +1054,7 @@ function LiveLogViewer({
   }
 
   const copyLogs = async () => {
-    await navigator.clipboard.writeText(body)
+    await navigator.clipboard.writeText(filteredBody)
     setCopyLabel('copied')
     window.setTimeout(() => setCopyLabel('copy'), 1200)
   }
@@ -1067,7 +1068,15 @@ function LiveLogViewer({
           <span className="viewer-mode">{transportLabel === 'stream' ? 'stream' : 'fallback sync'}</span>
           {streamError && <span className="viewer-error">{streamError}</span>}
         </div>
-        <div className="action-row compact">
+        <div className="viewer-controls">
+          <label className="log-filter">
+            <input
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              placeholder="grep lines"
+            />
+          </label>
+          <div className="action-row compact">
           <ActionIconButton label={isFollowing ? 'Pause follow' : 'Resume follow'} tone="ghost" onClick={toggleFollow}>
             {isFollowing ? <PauseIcon /> : <FollowIcon />}
           </ActionIconButton>
@@ -1083,11 +1092,21 @@ function LiveLogViewer({
           <ActionIconButton label={copyLabel === 'copied' ? 'Copied' : 'Copy logs'} tone="ghost" onClick={() => void copyLogs()}>
             <CopyIcon />
           </ActionIconButton>
+          </div>
         </div>
       </div>
-      <pre ref={logRef} onScroll={handleScroll}>{body}</pre>
+      <pre ref={logRef} onScroll={handleScroll}>{filteredBody}</pre>
     </section>
   )
+}
+
+function filterLogBody(body: string, filter: string) {
+  const needle = filter.trim().toLowerCase()
+  if (!needle) return body
+  return body
+    .split('\n')
+    .filter((line) => line.toLowerCase().includes(needle))
+    .join('\n')
 }
 
 function ActionIconButton({
