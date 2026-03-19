@@ -5,10 +5,13 @@
 }
 
 .sidebar {
-  position: relative;
+  position: sticky;
+  top: 0;
+  align-self: start;
   display: flex;
   flex-direction: column;
   gap: 2rem;
+  min-height: 100vh;
   padding: 2rem;
   border-right: 1px solid var(--border);
   background:
@@ -401,6 +404,10 @@
   }
 
   .sidebar {
+    position: relative;
+    top: auto;
+    align-self: stretch;
+    min-height: auto;
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
