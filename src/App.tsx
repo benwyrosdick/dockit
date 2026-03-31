@@ -151,8 +151,10 @@ function App() {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div>
+        <div className="brand-block">
+          <p className="eyebrow">Local Docker</p>
           <h1>Dockit</h1>
+          <p className="brand-copy">Compact runtime control</p>
         </div>
 
         <nav className="nav">
@@ -181,9 +183,10 @@ function App() {
 
       <main className="main-panel">
         <header className="topbar">
-          <div>
-            <p className="eyebrow">Control Surface</p>
+          <div className="topbar-copy">
+            <p className="eyebrow">{resources.find((item) => item.key === resource)?.label}</p>
             <h2>{resources.find((item) => item.key === resource)?.label}</h2>
+            <p className="topbar-meta">{currentItems.length} visible</p>
           </div>
 
           <div className="toolbar">

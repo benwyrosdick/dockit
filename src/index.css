@@ -1,19 +1,22 @@
 :root {
-  --bg: #f4f1ea;
-  --surface: rgba(255, 252, 247, 0.95);
-  --border: rgba(148, 163, 184, 0.28);
-  --text: #172033;
-  --muted: #6b7280;
-  --accent: #0f766e;
-  --danger: #dc2626;
+  --bg: #191c1f;
+  --surface: #23272a;
+  --surface-strong: #2b3034;
+  --surface-soft: #31363a;
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #eef2f5;
+  --muted: #98a2ad;
+  --accent: #67d4b0;
+  --danger: #f87171;
   --mono: 'IBM Plex Mono', 'SFMono-Regular', monospace;
   --sans: 'Manrope', 'Segoe UI', sans-serif;
   --display: 'Space Grotesk', 'Segoe UI', sans-serif;
   color: var(--text);
   background:
-    radial-gradient(circle at top, rgba(251, 146, 60, 0.16), transparent 28%),
-    linear-gradient(180deg, #f8f5ef, #efe8db 60%, #ebe3d6);
-  font: 16px/1.55 var(--sans);
+    radial-gradient(circle at top left, rgba(95, 211, 175, 0.12), transparent 24%),
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.04), transparent 28%),
+    linear-gradient(180deg, #171a1d, #101214);
+  font: 14px/1.45 var(--sans);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -41,13 +44,13 @@ input {
 
 button,
 input {
-  border-radius: 0.95rem;
+  border-radius: 0.7rem;
   border: 1px solid var(--border);
 }
 
 button {
-  padding: 0.72rem 1rem;
-  background: linear-gradient(135deg, #0f766e, #115e59);
+  padding: 0.6rem 0.9rem;
+  background: linear-gradient(180deg, #4fae93, #3f8f79);
   color: white;
   cursor: pointer;
   transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
@@ -55,7 +58,7 @@ button {
 
 button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 12px 24px rgba(15, 118, 110, 0.18);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.22);
 }
 
 button:disabled {
@@ -66,18 +69,22 @@ button:disabled {
 }
 
 button.ghost {
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--surface-soft);
   color: var(--text);
 }
 
 button.danger {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
+  background: linear-gradient(180deg, #ef4444, #dc2626);
 }
 
 input {
-  padding: 0.75rem 0.95rem;
-  background: rgba(255, 255, 255, 0.74);
+  padding: 0.62rem 0.82rem;
+  background: rgba(255, 255, 255, 0.04);
   color: var(--text);
+}
+
+input::placeholder {
+  color: #7f8994;
 }
 
 h1,
@@ -85,7 +92,7 @@ h2,
 h3 {
   margin: 0;
   font-family: var(--display);
-  line-height: 1.05;
+  line-height: 1.08;
   color: #f8fafc;
 }
 
@@ -96,6 +103,18 @@ h3 {
 .state-panel h3,
 .resource-head h3 {
   color: var(--text);
+}
+
+h1 {
+  font-size: 1.2rem;
+}
+
+h2 {
+  font-size: 1.05rem;
+}
+
+h3 {
+  font-size: 1rem;
 }
 
 a {
