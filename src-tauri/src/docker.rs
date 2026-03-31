@@ -1,16 +1,13 @@
-use bollard::container::{
-    ListContainersOptions, LogsOptions, RemoveContainerOptions, RestartContainerOptions,
-    StartContainerOptions, StopContainerOptions,
-};
 use bollard::errors::Error as BollardError;
-use bollard::image::{CreateImageOptions, ListImagesOptions, RemoveImageOptions};
 use bollard::models::{
     ContainerSummary as DockerContainerSummary, ImageSummary as DockerImageSummary, SystemVersion,
 };
-use bollard::network::InspectNetworkOptions;
 use bollard::query_parameters::{
-    InspectContainerOptionsBuilder, ListNetworksOptionsBuilder, ListVolumesOptionsBuilder,
-    RemoveVolumeOptionsBuilder,
+    CreateImageOptionsBuilder, InspectContainerOptionsBuilder, InspectNetworkOptionsBuilder,
+    ListContainersOptionsBuilder, ListImagesOptionsBuilder, ListNetworksOptionsBuilder,
+    ListVolumesOptionsBuilder, LogsOptionsBuilder, RemoveContainerOptionsBuilder,
+    RemoveImageOptionsBuilder, RemoveVolumeOptionsBuilder, RestartContainerOptionsBuilder,
+    StartContainerOptions, StopContainerOptionsBuilder,
 };
 use bollard::Docker;
 use futures_util::TryStreamExt;
@@ -112,10 +109,7 @@ pub async fn docker_status() -> DockerStatus {
 pub async fn list_containers() -> DockitResult<Vec<ContainerSummary>> {
     let client = docker()?;
     let containers = client
-        .list_containers(Some(ListContainersOptions::<String> {
-            all: true,
-            ..Default::default()
-        }))
+        .list_containers(Some(ListContainersOptionsBuilder::new().all(true).build()))
         .await?;
 
     Ok(containers.into_iter().map(map_container).collect())
@@ -123,21 +117,21 @@ pub async fn list_containers() -> DockitResult<Vec<ContainerSummary>> {
 
 pub async fn start_container(id: &str) -> DockitResult<()> {
     docker()?
-        .start_container(id, None::<StartContainerOptions<String>>)
+        .start_container(id, None::<StartContainerOptions>)
         .await?;
     Ok(())
 }
 
 pub async fn stop_container(id: &str) -> DockitResult<()> {
     docker()?
-        .stop_container(id, Some(StopContainerOptions { t: 10 }))
+        .stop_container(id, Some(StopContainerOptionsBuilder::new().t(10).build()))
         .await?;
     Ok(())
 }
 
 pub async fn restart_container(id: &str) -> DockitResult<()> {
     docker()?
-        .restart_container(id, Some(RestartContainerOptions { t: 10 }))
+        .restart_container(id, Some(RestartContainerOptionsBuilder::new().t(10).build()))
         .await?;
     Ok(())
 }
@@ -146,11 +140,13 @@ pub async fn remove_container(id: &str) -> DockitResult<()> {
     docker()?
         .remove_container(
             id,
-            Some(RemoveContainerOptions {
-                v: true,
-                force: true,
-                link: false,
-            }),
+            Some(
+                RemoveContainerOptionsBuilder::new()
+                    .v(true)
+                    .force(true)
+                    .link(false)
+                    .build(),
+            ),
         )
         .await?;
     Ok(())
@@ -159,14 +155,15 @@ pub async fn remove_container(id: &str) -> DockitResult<()> {
 pub async fn container_logs(id: &str, tail: usize) -> DockitResult<String> {
     let mut stream = docker()?.logs(
         id,
-        Some(LogsOptions::<String> {
-            follow: false,
-            stdout: true,
-            stderr: true,
-            timestamps: true,
-            tail: tail.to_string(),
-            ..Default::default()
-        }),
+        Some(
+            LogsOptionsBuilder::new()
+                .follow(false)
+                .stdout(true)
+                .stderr(true)
+                .timestamps(true)
+                .tail(&tail.to_string())
+                .build(),
+        ),
     );
 
     let mut output = String::new();
@@ -183,14 +180,15 @@ pub fn container_log_stream(
 ) -> DockitResult<impl futures_util::Stream<Item = Result<String, DockitError>>> {
     let stream = docker()?.logs(
         &id,
-        Some(LogsOptions::<String> {
-            follow: true,
-            stdout: true,
-            stderr: true,
-            timestamps: true,
-            tail: tail.to_string(),
-            ..Default::default()
-        }),
+        Some(
+            LogsOptionsBuilder::new()
+                .follow(true)
+                .stdout(true)
+                .stderr(true)
+                .timestamps(true)
+                .tail(&tail.to_string())
+                .build(),
+        ),
     );
 
     Ok(stream
@@ -208,10 +206,7 @@ pub async fn inspect_container(id: &str) -> DockitResult<Value> {
 
 pub async fn list_images() -> DockitResult<Vec<ImageSummary>> {
     let images = docker()?
-        .list_images(Some(ListImagesOptions::<String> {
-            all: true,
-            ..Default::default()
-        }))
+        .list_images(Some(ListImagesOptionsBuilder::new().all(true).build()))
         .await?;
 
     Ok(images.into_iter().map(map_image).collect())
@@ -221,10 +216,7 @@ pub async fn remove_image(id: &str) -> DockitResult<()> {
     docker()?
         .remove_image(
             id,
-            Some(RemoveImageOptions {
-                force: true,
-                noprune: false,
-            }),
+            Some(RemoveImageOptionsBuilder::new().force(true).noprune(false).build()),
             None,
         )
         .await?;
@@ -237,10 +229,7 @@ pub async fn inspect_image(id: &str) -> DockitResult<Value> {
 
 pub async fn pull_image(image: &str) -> DockitResult<()> {
     let mut stream = docker()?.create_image(
-        Some(CreateImageOptions {
-            from_image: image,
-            ..Default::default()
-        }),
+        Some(CreateImageOptionsBuilder::new().from_image(image).build()),
         None,
         None,
     );
@@ -311,7 +300,15 @@ pub async fn remove_network(id: &str) -> DockitResult<()> {
 pub async fn inspect_network(id: &str) -> DockitResult<Value> {
     Ok(serde_json::to_value(
         docker()?
-            .inspect_network(id, Some(InspectNetworkOptions { verbose: true, scope: "local" }))
+            .inspect_network(
+                id,
+                Some(
+                    InspectNetworkOptionsBuilder::new()
+                        .verbose(true)
+                        .scope("local")
+                        .build(),
+                ),
+            )
             .await?,
     )?)
 }
