@@ -1345,7 +1345,7 @@ function LiveLogViewer({
   const [isFollowing, setIsFollowing] = useState(true)
   const [copyLabel, setCopyLabel] = useState<'copy' | 'copied'>('copy')
   const [filter, setFilter] = useState('')
-  const [hideTimestamps, setHideTimestamps] = useState(false)
+  const [hideTimestamps, setHideTimestamps] = useState(true)
   const [streamError, setStreamError] = useState<string | null>(null)
   const [transportLabel, setTransportLabel] = useState<'stream' | 'fallback'>('stream')
   const logRef = useRef<HTMLDivElement | null>(null)
@@ -1473,10 +1473,10 @@ function LiveLogViewer({
           <label className="log-toggle">
             <input
               type="checkbox"
-              checked={hideTimestamps}
-              onChange={(event) => setHideTimestamps(event.target.checked)}
+              checked={!hideTimestamps}
+              onChange={(event) => setHideTimestamps(!event.target.checked)}
             />
-            <span>Hide timestamps</span>
+            <span>Show timestamps</span>
           </label>
           <div className="action-row compact">
           <ActionIconButton label={isFollowing ? 'Pause follow' : 'Resume follow'} tone="ghost" onClick={toggleFollow}>
