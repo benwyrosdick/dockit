@@ -13,7 +13,9 @@ import {
   listNetworks,
   listVolumes,
   pullImage,
+  startContainer,
   startContainerLogStream,
+  stopContainer,
   stopContainerLogStream,
   containerLogs,
 } from './lib/api'
@@ -207,6 +209,7 @@ function App() {
           <ContainersSection
             items={filteredData.containers}
             loading={containersQuery.isLoading}
+            busy={busy}
             selectedId={effectiveSelectedId}
             selectedTab={detailTab}
             inspectData={detailQuery.data}
@@ -214,6 +217,7 @@ function App() {
             inspectError={detailQuery.error}
             onSelect={setSelectedResourceId}
             onSelectTab={setDetailTab}
+            onQuickAction={(item) => actionMutation.mutate(() => item.state === 'running' ? stopContainer(item.id) : startContainer(item.id))}
           />
         )}
 
@@ -303,6 +307,7 @@ function StatusPanel({ status, loading }: { status?: DockerStatus; loading: bool
 function ContainersSection({
   items,
   loading,
+  busy,
   selectedId,
   selectedTab,
   inspectData,
@@ -310,9 +315,11 @@ function ContainersSection({
   inspectError,
   onSelect,
   onSelectTab,
+  onQuickAction,
 }: {
   items: ContainerSummary[]
   loading: boolean
+  busy: boolean
   selectedId: string
   selectedTab: DetailTab
   inspectData?: InspectPayload
@@ -320,6 +327,7 @@ function ContainersSection({
   inspectError: unknown
   onSelect: (id: string) => void
   onSelectTab: (tab: DetailTab) => void
+  onQuickAction: (item: ContainerSummary) => void
 }) {
   if (loading) return <StatePanel title="Loading containers" copy="Collecting runtime inventory." />
   if (!items.length) return <StatePanel title="No containers" copy="Start a workload and it will show up here." />
@@ -340,6 +348,7 @@ function ContainersSection({
           <div className="resource-list">
             {items.map((item) => {
               const running = item.state === 'running'
+              const actionLabel = running ? 'Stop container' : 'Start container'
               return (
                 <article
                   key={item.id}
@@ -356,6 +365,19 @@ function ContainersSection({
                     </div>
                     <small>{item.image}</small>
                     <span className="resource-meta-line uptime-line">{item.status}</span>
+                  </div>
+                  <div className="resource-item-actions">
+                    <ActionIconButton
+                      label={actionLabel}
+                      tone="ghost"
+                      disabled={busy}
+                      onClick={() => {
+                        onSelect(item.id)
+                        onQuickAction(item)
+                      }}
+                    >
+                      {running ? <StopIcon /> : <PlayIcon />}
+                    </ActionIconButton>
                   </div>
                 </article>
               )
@@ -1140,6 +1162,14 @@ function ActionIconButton({
 
 function PauseIcon() {
   return <IconFrame path="M9 7v10M15 7v10" />
+}
+
+function PlayIcon() {
+  return <IconFrame path="M9 7.5v9l7-4.5-7-4.5Z" />
+}
+
+function StopIcon() {
+  return <IconFrame path="M8 8h8v8H8z" />
 }
 
 function FollowIcon() {

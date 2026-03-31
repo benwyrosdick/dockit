@@ -249,7 +249,10 @@
 }
 
 .resource-list-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
   padding: 0.62rem 0.3rem 0.62rem 0.68rem;
   border: 0;
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
@@ -273,6 +276,21 @@
   display: grid;
   gap: 0.05rem;
   min-width: 0;
+  flex: 1;
+}
+
+.resource-item-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.resource-item-actions .icon-button.ghost {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.resource-item-actions .icon-button.ghost:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .resource-item-copy strong,
