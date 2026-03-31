@@ -818,6 +818,7 @@
 .viewer-controls {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
   min-width: 0;
 }
@@ -836,6 +837,21 @@
 
 .log-filter input {
   min-width: 11rem;
+}
+
+.log-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.log-toggle input {
+  width: 0.95rem;
+  height: 0.95rem;
+  margin: 0;
 }
 
 .viewer-mode {

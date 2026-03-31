@@ -1345,11 +1345,16 @@ function LiveLogViewer({
   const [isFollowing, setIsFollowing] = useState(true)
   const [copyLabel, setCopyLabel] = useState<'copy' | 'copied'>('copy')
   const [filter, setFilter] = useState('')
+  const [hideTimestamps, setHideTimestamps] = useState(false)
   const [streamError, setStreamError] = useState<string | null>(null)
   const [transportLabel, setTransportLabel] = useState<'stream' | 'fallback'>('stream')
   const logRef = useRef<HTMLDivElement | null>(null)
   const lastStreamAtRef = useRef(0)
   const filteredBody = useMemo(() => filterLogBody(body, filter), [body, filter])
+  const renderedBody = useMemo(
+    () => (hideTimestamps ? stripLogTimestamps(filteredBody) : filteredBody),
+    [filteredBody, hideTimestamps],
+  )
 
   useEffect(() => {
     if (!containerId) return
@@ -1422,7 +1427,7 @@ function LiveLogViewer({
     const element = logRef.current
     if (!element || !isFollowing) return
     element.scrollTop = element.scrollHeight
-  }, [filteredBody, isFollowing])
+  }, [isFollowing, renderedBody])
 
   const handleScroll = () => {
     const element = logRef.current
@@ -1443,7 +1448,7 @@ function LiveLogViewer({
   }
 
   const copyLogs = async () => {
-    await navigator.clipboard.writeText(filteredBody)
+    await navigator.clipboard.writeText(renderedBody)
     setCopyLabel('copied')
     window.setTimeout(() => setCopyLabel('copy'), 1200)
   }
@@ -1465,6 +1470,14 @@ function LiveLogViewer({
               placeholder="grep lines"
             />
           </label>
+          <label className="log-toggle">
+            <input
+              type="checkbox"
+              checked={hideTimestamps}
+              onChange={(event) => setHideTimestamps(event.target.checked)}
+            />
+            <span>Hide timestamps</span>
+          </label>
           <div className="action-row compact">
           <ActionIconButton label={isFollowing ? 'Pause follow' : 'Resume follow'} tone="ghost" onClick={toggleFollow}>
             {isFollowing ? <PauseIcon /> : <FollowIcon />}
@@ -1485,7 +1498,7 @@ function LiveLogViewer({
         </div>
       </div>
       <ScrollArea className="code-scroll-area" viewportClassName="code-scroll-viewport" viewportRef={logRef} onScroll={handleScroll}>
-        <pre><AnsiText text={filteredBody} /></pre>
+        <pre><AnsiText text={renderedBody} /></pre>
       </ScrollArea>
     </section>
   )
@@ -1614,6 +1627,10 @@ function filterLogBody(body: string, filter: string) {
     .split('\n')
     .filter((line) => line.toLowerCase().includes(needle))
     .join('\n')
+}
+
+function stripLogTimestamps(body: string) {
+  return body.replace(/(^|\n)\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, '$1')
 }
 
 function ActionIconButton({
