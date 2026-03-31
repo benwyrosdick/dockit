@@ -1,0 +1,48 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="132" y1="84" x2="878" y2="938" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#76F0FF"/>
+      <stop offset="0.42" stop-color="#2F78FF"/>
+      <stop offset="1" stop-color="#0A1737"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="280" y1="224" x2="704" y2="760" gradientUnits="userSpaceOnUse">
+      <stop stop-color="white" stop-opacity="0.72"/>
+      <stop offset="0.45" stop-color="#B5EEFF" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#6ACDFF" stop-opacity="0.16"/>
+    </linearGradient>
+    <linearGradient id="glassStroke" x1="246" y1="168" x2="756" y2="790" gradientUnits="userSpaceOnUse">
+      <stop stop-color="white" stop-opacity="0.82"/>
+      <stop offset="1" stop-color="#B9F5FF" stop-opacity="0.18"/>
+    </linearGradient>
+    <linearGradient id="cargoA" x1="334" y1="346" x2="601" y2="523" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFB86A"/>
+      <stop offset="1" stop-color="#FF6E8B"/>
+    </linearGradient>
+    <linearGradient id="cargoB" x1="446" y1="322" x2="698" y2="487" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8A7DFF"/>
+      <stop offset="1" stop-color="#45D6FF"/>
+    </linearGradient>
+    <linearGradient id="cargoC" x1="381" y1="431" x2="657" y2="601" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7BF5C7"/>
+      <stop offset="1" stop-color="#3EA7FF"/>
+    </linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="220" fill="url(#bg)"/>
+  <circle cx="760" cy="246" r="152" fill="white" fill-opacity="0.12"/>
+  <circle cx="272" cy="794" r="196" fill="#79E2FF" fill-opacity="0.12"/>
+  <path d="M212 678C281 712 342 721 410 705C490 686 558 632 643 629C695 627 737 648 775 687C734 775 649 842 534 849C409 857 289 793 212 678Z" fill="white" fill-opacity="0.14"/>
+  <path d="M304 598C317 509 390 444 476 444H589C646 444 698 468 731 516L782 589C804 621 830 645 862 661C845 688 818 710 782 720C749 729 715 727 677 718C648 760 601 790 545 800C464 814 379 787 329 731C304 704 293 652 304 598Z" fill="url(#glass)" stroke="url(#glassStroke)" stroke-width="14"/>
+  <path d="M716 563C748 578 771 607 781 645" stroke="white" stroke-opacity="0.46" stroke-width="12" stroke-linecap="round"/>
+  <path d="M408 724C436 744 474 754 514 752" stroke="white" stroke-opacity="0.52" stroke-width="12" stroke-linecap="round"/>
+  <rect x="341" y="330" width="124" height="96" rx="22" fill="url(#cargoA)" fill-opacity="0.92"/>
+  <rect x="472" y="308" width="124" height="96" rx="22" fill="url(#cargoB)" fill-opacity="0.92"/>
+  <rect x="397" y="433" width="124" height="96" rx="22" fill="url(#cargoC)" fill-opacity="0.92"/>
+  <rect x="528" y="412" width="124" height="96" rx="22" fill="url(#cargoA)" fill-opacity="0.86"/>
+  <path d="M656 356H726C749 356 768 375 768 398V434" stroke="white" stroke-opacity="0.64" stroke-width="14" stroke-linecap="round"/>
+  <path d="M700 357L724 333" stroke="white" stroke-opacity="0.56" stroke-width="14" stroke-linecap="round"/>
+  <path d="M348 266C401 214 471 185 546 185C626 185 703 218 759 278" stroke="white" stroke-opacity="0.18" stroke-width="18" stroke-linecap="round"/>
+  <path d="M266 745C321 810 405 852 496 861" stroke="white" stroke-opacity="0.12" stroke-width="18" stroke-linecap="round"/>
+  <rect x="139" y="139" width="746" height="328" rx="160" fill="white" fill-opacity="0.08"/>
+  <rect x="128" y="128" width="768" height="768" rx="188" stroke="white" stroke-opacity="0.16" stroke-width="8"/>
+  <path d="M301 274C394 227 500 217 605 245" stroke="white" stroke-opacity="0.44" stroke-width="12" stroke-linecap="round"/>
+</svg>
