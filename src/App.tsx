@@ -1047,6 +1047,7 @@ function ContainerDetailPane({
   const networkSettings = asRecord(inspect.NetworkSettings)
   const mounts = asArray(inspect.Mounts)
   const labels = entriesOf(asRecord(config.Labels))
+  const envRows = envRowsFromList(readStringArray(config.Env))
 
   return (
     <>
@@ -1107,6 +1108,11 @@ function ContainerDetailPane({
             columns={['Key', 'Value']}
             rows={labels.length ? labels : [['No labels', '']]}
           />
+          <SimpleTableSection
+            title="Environment"
+            columns={['Key', 'Value']}
+            rows={envRows.length ? envRows : [['No environment variables', '']]}
+          />
           {state.Health ? (
             <KeyValueSection
               title="Health"
@@ -1133,6 +1139,7 @@ function ImageDetailPane({ item, selectedTab, inspectData, inspectLoading, inspe
   const inspect = asRecord(inspectData)
   const config = asRecord(inspect.Config)
   const labels = entriesOf(asRecord(config.Labels))
+  const envRows = envRowsFromList(readStringArray(config.Env))
   const repoDigests = readStringArray(inspect.RepoDigests)
 
   return (
@@ -1157,6 +1164,7 @@ function ImageDetailPane({ item, selectedTab, inspectData, inspectLoading, inspe
           />
           <SimpleTableSection title="Tags" columns={['Tag']} rows={(item.tags.length ? item.tags : ['No tags']).map((tag) => [tag])} />
           <SimpleTableSection title="Repo digests" columns={['Digest']} rows={(repoDigests.length ? repoDigests : ['No repo digests']).map((digest) => [digest])} />
+          <SimpleTableSection title="Environment" columns={['Key', 'Value']} rows={envRows.length ? envRows : [['No environment variables', '']]} />
           <SimpleTableSection title="Labels" columns={['Key', 'Value']} rows={labels.length ? labels : [['No labels', '']]} />
         </ScrollArea>
       )}
@@ -1631,6 +1639,14 @@ function filterLogBody(body: string, filter: string) {
 
 function stripLogTimestamps(body: string) {
   return body.replace(/(^|\n)\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, '$1')
+}
+
+function envRowsFromList(entries: string[]) {
+  return entries.map((entry) => {
+    const separatorIndex = entry.indexOf('=')
+    if (separatorIndex === -1) return [entry, '--'] as [string, string]
+    return [entry.slice(0, separatorIndex), entry.slice(separatorIndex + 1)] as [string, string]
+  })
 }
 
 function ActionIconButton({
