@@ -34,6 +34,14 @@ import type {
 type ResourceKey = 'containers' | 'images' | 'volumes' | 'networks'
 
 type DetailTab = 'info' | 'logs' | 'inspect'
+type AnsiStyle = {
+  color?: string
+  backgroundColor?: string
+  fontWeight?: '700'
+  fontStyle?: 'italic'
+  textDecoration?: 'underline'
+  opacity?: number
+}
 
 type ContainerQuickAction = 'start' | 'stop' | 'restart' | 'delete'
 
@@ -1477,10 +1485,126 @@ function LiveLogViewer({
         </div>
       </div>
       <ScrollArea className="code-scroll-area" viewportClassName="code-scroll-viewport" viewportRef={logRef} onScroll={handleScroll}>
-        <pre>{filteredBody}</pre>
+        <pre><AnsiText text={filteredBody} /></pre>
       </ScrollArea>
     </section>
   )
+}
+
+function AnsiText({ text }: { text: string }) {
+  const segments = useMemo(() => parseAnsiSegments(text), [text])
+
+  return (
+    <>
+      {segments.map((segment, index) => (
+        <span key={`${index}-${segment.text.length}`} style={segment.style}>
+          {segment.text}
+        </span>
+      ))}
+    </>
+  )
+}
+
+function parseAnsiSegments(text: string): Array<{ text: string; style: AnsiStyle }> {
+  const pattern = /\u001b\[([0-9;]*)m/g
+  const segments: Array<{ text: string; style: AnsiStyle }> = []
+  let currentStyle: AnsiStyle = {}
+  let lastIndex = 0
+
+  for (const match of text.matchAll(pattern)) {
+    const matchIndex = match.index ?? 0
+    if (matchIndex > lastIndex) {
+      segments.push({ text: text.slice(lastIndex, matchIndex), style: currentStyle })
+    }
+
+    const codes = (match[1] || '0')
+      .split(';')
+      .map((value) => Number.parseInt(value, 10))
+      .filter((value) => !Number.isNaN(value))
+
+    currentStyle = applyAnsiCodes(currentStyle, codes.length ? codes : [0])
+    lastIndex = matchIndex + match[0].length
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ text: text.slice(lastIndex), style: currentStyle })
+  }
+
+  return segments.length ? segments : [{ text, style: {} }]
+}
+
+function applyAnsiCodes(style: AnsiStyle, codes: number[]): AnsiStyle {
+  let nextStyle = { ...style }
+
+  for (const code of codes) {
+    if (code === 0) {
+      nextStyle = {}
+    } else if (code === 1) {
+      nextStyle.fontWeight = '700'
+    } else if (code === 2) {
+      nextStyle.opacity = 0.72
+    } else if (code === 3) {
+      nextStyle.fontStyle = 'italic'
+    } else if (code === 4) {
+      nextStyle.textDecoration = 'underline'
+    } else if (code === 22) {
+      delete nextStyle.fontWeight
+      delete nextStyle.opacity
+    } else if (code === 23) {
+      delete nextStyle.fontStyle
+    } else if (code === 24) {
+      delete nextStyle.textDecoration
+    } else if (code === 39) {
+      delete nextStyle.color
+    } else if (code === 49) {
+      delete nextStyle.backgroundColor
+    } else if ((code >= 30 && code <= 37) || (code >= 90 && code <= 97)) {
+      nextStyle.color = ansiColorValue(code)
+    } else if ((code >= 40 && code <= 47) || (code >= 100 && code <= 107)) {
+      nextStyle.backgroundColor = ansiColorValue(code)
+    }
+  }
+
+  return nextStyle
+}
+
+function ansiColorValue(code: number): string {
+  const palette: Record<number, string> = {
+    30: '#1f2937',
+    31: '#f87171',
+    32: '#4ade80',
+    33: '#fbbf24',
+    34: '#60a5fa',
+    35: '#f472b6',
+    36: '#22d3ee',
+    37: '#e5e7eb',
+    40: '#1f2937',
+    41: '#7f1d1d',
+    42: '#14532d',
+    43: '#78350f',
+    44: '#1e3a8a',
+    45: '#701a75',
+    46: '#164e63',
+    47: '#d1d5db',
+    90: '#6b7280',
+    91: '#fca5a5',
+    92: '#86efac',
+    93: '#fcd34d',
+    94: '#93c5fd',
+    95: '#f9a8d4',
+    96: '#67e8f9',
+    97: '#f9fafb',
+    100: '#4b5563',
+    101: '#b91c1c',
+    102: '#166534',
+    103: '#a16207',
+    104: '#1d4ed8',
+    105: '#a21caf',
+    106: '#0f766e',
+    107: '#f3f4f6',
+  }
+
+  return palette[code] || 'inherit'
 }
 
 function filterLogBody(body: string, filter: string) {
