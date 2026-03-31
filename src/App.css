@@ -218,6 +218,7 @@
   gap: 0.5rem;
   min-height: 0;
   overflow: hidden;
+  position: relative;
 }
 
 .list-pane-header,
@@ -291,6 +292,60 @@
 
 .resource-item-actions .icon-button.ghost:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+.context-menu-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.context-menu {
+  position: fixed;
+  min-width: 206px;
+  padding: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(43, 29, 46, 0.94), rgba(30, 34, 38, 0.98) 34%);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(18px);
+}
+
+.context-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.8rem;
+  border: 0;
+  border-radius: 0.8rem;
+  background: transparent;
+  color: #f3f4f6;
+  box-shadow: none;
+  justify-content: flex-start;
+}
+
+.context-menu-item:hover {
+  transform: none;
+  background: linear-gradient(180deg, rgba(198, 61, 208, 0.96), rgba(157, 37, 175, 0.96));
+  box-shadow: none;
+}
+
+.context-menu-item.danger {
+  color: #fda4af;
+}
+
+.context-menu-item.danger:hover {
+  color: #fff1f2;
+}
+
+.context-menu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
 }
 
 .resource-item-copy strong,

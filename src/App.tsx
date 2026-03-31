@@ -13,6 +13,8 @@ import {
   listNetworks,
   listVolumes,
   pullImage,
+  removeContainer,
+  restartContainer,
   startContainer,
   startContainerLogStream,
   stopContainer,
@@ -32,6 +34,8 @@ import type {
 type ResourceKey = 'containers' | 'images' | 'volumes' | 'networks'
 
 type DetailTab = 'info' | 'logs' | 'inspect'
+
+type ContainerQuickAction = 'start' | 'stop' | 'restart' | 'delete'
 
 const resources: Array<{
   key: ResourceKey
@@ -217,7 +221,21 @@ function App() {
             inspectError={detailQuery.error}
             onSelect={setSelectedResourceId}
             onSelectTab={setDetailTab}
-            onQuickAction={(item) => actionMutation.mutate(() => item.state === 'running' ? stopContainer(item.id) : startContainer(item.id))}
+            onQuickAction={(item, action = item.state === 'running' ? 'stop' : 'start') =>
+              actionMutation.mutate(() => {
+                switch (action) {
+                  case 'start':
+                    return startContainer(item.id)
+                  case 'stop':
+                    return stopContainer(item.id)
+                  case 'restart':
+                    return restartContainer(item.id)
+                  case 'delete':
+                    return removeContainer(item.id)
+                  default:
+                    return Promise.resolve()
+                }
+              })}
           />
         )}
 
@@ -327,8 +345,31 @@ function ContainersSection({
   inspectError: unknown
   onSelect: (id: string) => void
   onSelectTab: (tab: DetailTab) => void
-  onQuickAction: (item: ContainerSummary) => void
+  onQuickAction: (item: ContainerSummary, action?: ContainerQuickAction) => void
 }) {
+  const [menuState, setMenuState] = useState<{ item: ContainerSummary; x: number; y: number } | null>(null)
+
+  useEffect(() => {
+    if (!menuState) return
+
+    const closeMenu = () => setMenuState(null)
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuState(null)
+    }
+
+    window.addEventListener('pointerdown', closeMenu)
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('pointerdown', closeMenu)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [menuState])
+
+  useEffect(() => {
+    if (busy) setMenuState(null)
+  }, [busy])
+
   if (loading) return <StatePanel title="Loading containers" copy="Collecting runtime inventory." />
   if (!items.length) return <StatePanel title="No containers" copy="Start a workload and it will show up here." />
 
@@ -357,6 +398,11 @@ function ContainersSection({
                     onSelect(item.id)
                     onSelectTab('info')
                   }}
+                  onContextMenu={(event) => {
+                    event.preventDefault()
+                    onSelect(item.id)
+                    setMenuState({ item, x: event.clientX, y: event.clientY })
+                  }}
                 >
                   <div className="resource-item-copy">
                     <div className="resource-item-head">
@@ -383,6 +429,19 @@ function ContainersSection({
               )
             })}
           </div>
+          {menuState ? (
+            <ContainerContextMenu
+              item={menuState.item}
+              x={menuState.x}
+              y={menuState.y}
+              busy={busy}
+              onClose={() => setMenuState(null)}
+              onAction={(action) => {
+                setMenuState(null)
+                onQuickAction(menuState.item, action)
+              }}
+            />
+          ) : null}
         </section>
       }
       detail={
@@ -396,6 +455,64 @@ function ContainersSection({
         />
       }
     />
+  )
+}
+
+function ContainerContextMenu({
+  item,
+  x,
+  y,
+  busy,
+  onClose,
+  onAction,
+}: {
+  item: ContainerSummary
+  x: number
+  y: number
+  busy: boolean
+  onClose: () => void
+  onAction: (action: ContainerQuickAction) => void
+}) {
+  const running = item.state === 'running'
+  const primaryAction: ContainerQuickAction = running ? 'stop' : 'start'
+  const actions: Array<{ key: ContainerQuickAction; label: string; icon: ReactNode; danger?: boolean }> = [
+    {
+      key: primaryAction,
+      label: running ? 'Stop' : 'Start',
+      icon: running ? <StopIcon /> : <PlayIcon />,
+    },
+    { key: 'restart', label: 'Restart', icon: <RestartIcon /> },
+    { key: 'delete', label: 'Delete', icon: <TrashIcon />, danger: true },
+  ]
+
+  return (
+    <div
+      className="context-menu-layer"
+      onContextMenu={(event) => {
+        event.preventDefault()
+        onClose()
+      }}
+    >
+      <div
+        className="context-menu"
+        style={{ left: Math.min(x, window.innerWidth - 232), top: Math.min(y, window.innerHeight - 180) }}
+        onPointerDown={(event) => event.stopPropagation()}
+        onContextMenu={(event) => event.preventDefault()}
+      >
+        {actions.map((action) => (
+          <button
+            key={action.key}
+            type="button"
+            className={action.danger ? 'context-menu-item danger' : 'context-menu-item'}
+            disabled={busy}
+            onClick={() => onAction(action.key)}
+          >
+            <span className="context-menu-icon">{action.icon}</span>
+            <span>{action.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -1170,6 +1287,14 @@ function PlayIcon() {
 
 function StopIcon() {
   return <IconFrame path="M8 8h8v8H8z" />
+}
+
+function RestartIcon() {
+  return <IconFrame path="M18 10a6 6 0 1 0 1.2 3.6M18 10V6m0 4h-4" />
+}
+
+function TrashIcon() {
+  return <IconFrame path="M6 7h12M9 7V5h6v2m-7 3v7m4-7v7m4-7v7M8 7l1 12h6l1-12" />
 }
 
 function FollowIcon() {
