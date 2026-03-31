@@ -1579,32 +1579,48 @@ function StatePanel({ title, copy }: { title: string; copy: string }) {
 
 function filterContainers(items: ContainerSummary[], search: string) {
   const needle = search.trim().toLowerCase()
-  if (!needle) return items
-  return items.filter((item) =>
-    [item.name, item.image, item.state, item.status, item.id].some((value) =>
-      value.toLowerCase().includes(needle),
-    ),
-  )
+  const filtered = !needle
+    ? items
+    : items.filter((item) =>
+        [item.name, item.image, item.state, item.status, item.id].some((value) =>
+          value.toLowerCase().includes(needle),
+        ),
+      )
+
+  return [...filtered].sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }))
 }
 
 function filterImages(items: ImageSummary[], search: string) {
   const needle = search.trim().toLowerCase()
-  if (!needle) return items
-  return items.filter((item) =>
-    [item.id, item.primaryTag, ...item.tags].join(' ').toLowerCase().includes(needle),
-  )
+  const filtered = !needle
+    ? items
+    : items.filter((item) =>
+        [item.id, item.primaryTag, ...item.tags].join(' ').toLowerCase().includes(needle),
+      )
+
+  return [...filtered].sort((left, right) => imageSortLabel(left).localeCompare(imageSortLabel(right), undefined, { sensitivity: 'base' }))
 }
 
 function filterVolumes(items: VolumeSummary[], search: string) {
   const needle = search.trim().toLowerCase()
-  if (!needle) return items
-  return items.filter((item) => [item.name, item.driver, item.scope].join(' ').toLowerCase().includes(needle))
+  const filtered = !needle
+    ? items
+    : items.filter((item) => [item.name, item.driver, item.scope].join(' ').toLowerCase().includes(needle))
+
+  return [...filtered].sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }))
 }
 
 function filterNetworks(items: NetworkSummary[], search: string) {
   const needle = search.trim().toLowerCase()
-  if (!needle) return items
-  return items.filter((item) => [item.id, item.name, item.driver, item.scope].join(' ').toLowerCase().includes(needle))
+  const filtered = !needle
+    ? items
+    : items.filter((item) => [item.id, item.name, item.driver, item.scope].join(' ').toLowerCase().includes(needle))
+
+  return [...filtered].sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }))
+}
+
+function imageSortLabel(item: ImageSummary) {
+  return item.primaryTag || item.tags[0] || item.id
 }
 
 function networkFlags(item: NetworkSummary) {
