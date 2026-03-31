@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { listen } from '@tauri-apps/api/event'
 import './App.css'
@@ -47,6 +47,247 @@ const resources: Array<{
   { key: 'volumes', label: 'Volumes', caption: 'Persistent data' },
   { key: 'networks', label: 'Networks', caption: 'Connectivity fabric' },
 ]
+
+const CUSTOM_SCROLLBAR_SIZE = 10
+const CUSTOM_SCROLLBAR_INSET = 4
+const CUSTOM_SCROLLBAR_GAP = 12
+
+function ScrollArea({
+  className,
+  viewportClassName,
+  viewportRef,
+  onScroll,
+  children,
+}: {
+  className?: string
+  viewportClassName?: string
+  viewportRef?: React.RefObject<HTMLDivElement | null> | ((node: HTMLDivElement | null) => void)
+  onScroll?: () => void
+  children: ReactNode
+}) {
+  const internalRef = useRef<HTMLDivElement | null>(null)
+  const dragRef = useRef<
+    | {
+        axis: 'x' | 'y'
+        pointerStart: number
+        scrollStart: number
+        trackSize: number
+        thumbSize: number
+        maxScroll: number
+      }
+    | null
+  >(null)
+  const [metrics, setMetrics] = useState({
+    verticalVisible: false,
+    verticalThumbSize: 0,
+    verticalThumbOffset: 0,
+    horizontalVisible: false,
+    horizontalThumbSize: 0,
+    horizontalThumbOffset: 0,
+  })
+
+  const setViewportRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      internalRef.current = node
+      if (!viewportRef) return
+      if (typeof viewportRef === 'function') {
+        viewportRef(node)
+        return
+      }
+      viewportRef.current = node
+    },
+    [viewportRef],
+  )
+
+  const updateMetrics = useCallback(() => {
+    const viewport = internalRef.current
+    if (!viewport) return
+
+    const verticalVisible = viewport.scrollHeight > viewport.clientHeight + 1
+    const horizontalVisible = viewport.scrollWidth > viewport.clientWidth + 1
+    const verticalTrackSize = Math.max(
+      viewport.clientHeight - CUSTOM_SCROLLBAR_INSET * 2 - (horizontalVisible ? CUSTOM_SCROLLBAR_SIZE + CUSTOM_SCROLLBAR_GAP : 0),
+      0,
+    )
+    const horizontalTrackSize = Math.max(
+      viewport.clientWidth - CUSTOM_SCROLLBAR_INSET * 2 - (verticalVisible ? CUSTOM_SCROLLBAR_SIZE + CUSTOM_SCROLLBAR_GAP : 0),
+      0,
+    )
+    const verticalMaxScroll = Math.max(viewport.scrollHeight - viewport.clientHeight, 0)
+    const horizontalMaxScroll = Math.max(viewport.scrollWidth - viewport.clientWidth, 0)
+    const verticalThumbSize =
+      verticalVisible && verticalTrackSize > 0
+        ? Math.max((viewport.clientHeight / viewport.scrollHeight) * verticalTrackSize, 28)
+        : 0
+    const horizontalThumbSize =
+      horizontalVisible && horizontalTrackSize > 0
+        ? Math.max((viewport.clientWidth / viewport.scrollWidth) * horizontalTrackSize, 28)
+        : 0
+    const verticalThumbOffset =
+      verticalVisible && verticalMaxScroll > 0 && verticalTrackSize > verticalThumbSize
+        ? (viewport.scrollTop / verticalMaxScroll) * (verticalTrackSize - verticalThumbSize)
+        : 0
+    const horizontalThumbOffset =
+      horizontalVisible && horizontalMaxScroll > 0 && horizontalTrackSize > horizontalThumbSize
+        ? (viewport.scrollLeft / horizontalMaxScroll) * (horizontalTrackSize - horizontalThumbSize)
+        : 0
+
+    setMetrics({
+      verticalVisible,
+      verticalThumbSize,
+      verticalThumbOffset,
+      horizontalVisible,
+      horizontalThumbSize,
+      horizontalThumbOffset,
+    })
+  }, [])
+
+  useEffect(() => {
+    updateMetrics()
+  }, [children, updateMetrics])
+
+  useEffect(() => {
+    const viewport = internalRef.current
+    if (!viewport) return
+
+    const resizeObserver = new ResizeObserver(() => updateMetrics())
+    resizeObserver.observe(viewport)
+    Array.from(viewport.children).forEach((child) => resizeObserver.observe(child))
+
+    const rafId = window.requestAnimationFrame(updateMetrics)
+    window.addEventListener('resize', updateMetrics)
+
+    return () => {
+      window.cancelAnimationFrame(rafId)
+      window.removeEventListener('resize', updateMetrics)
+      resizeObserver.disconnect()
+    }
+  }, [children, updateMetrics])
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      const dragState = dragRef.current
+      const viewport = internalRef.current
+      if (!dragState || !viewport) return
+
+      const pointerNow = dragState.axis === 'y' ? event.clientY : event.clientX
+      const pointerDelta = pointerNow - dragState.pointerStart
+      const trackTravel = Math.max(dragState.trackSize - dragState.thumbSize, 1)
+      const nextScroll = dragState.scrollStart + (pointerDelta / trackTravel) * dragState.maxScroll
+
+      if (dragState.axis === 'y') {
+        viewport.scrollTop = nextScroll
+      } else {
+        viewport.scrollLeft = nextScroll
+      }
+      updateMetrics()
+    }
+
+    const handlePointerUp = () => {
+      dragRef.current = null
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+  }, [updateMetrics])
+
+  const handleScroll = () => {
+    updateMetrics()
+    onScroll?.()
+  }
+
+  const startThumbDrag = (axis: 'x' | 'y', event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const viewport = internalRef.current
+    if (!viewport) return
+
+    dragRef.current = {
+      axis,
+      pointerStart: axis === 'y' ? event.clientY : event.clientX,
+      scrollStart: axis === 'y' ? viewport.scrollTop : viewport.scrollLeft,
+      trackSize:
+        axis === 'y'
+          ? Math.max(viewport.clientHeight - CUSTOM_SCROLLBAR_INSET * 2 - (metrics.horizontalVisible ? CUSTOM_SCROLLBAR_SIZE + CUSTOM_SCROLLBAR_GAP : 0), 0)
+          : Math.max(viewport.clientWidth - CUSTOM_SCROLLBAR_INSET * 2 - (metrics.verticalVisible ? CUSTOM_SCROLLBAR_SIZE + CUSTOM_SCROLLBAR_GAP : 0), 0),
+      thumbSize: axis === 'y' ? metrics.verticalThumbSize : metrics.horizontalThumbSize,
+      maxScroll: axis === 'y' ? Math.max(viewport.scrollHeight - viewport.clientHeight, 0) : Math.max(viewport.scrollWidth - viewport.clientWidth, 0),
+    }
+  }
+
+  const handleTrackPress = (axis: 'x' | 'y', event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return
+
+    const viewport = internalRef.current
+    if (!viewport) return
+
+    const rect = event.currentTarget.getBoundingClientRect()
+
+    if (axis === 'y') {
+      const clickOffset = event.clientY - rect.top - metrics.verticalThumbSize / 2
+      const travel = Math.max(rect.height - metrics.verticalThumbSize, 1)
+      const nextRatio = Math.min(Math.max(clickOffset / travel, 0), 1)
+      viewport.scrollTop = nextRatio * Math.max(viewport.scrollHeight - viewport.clientHeight, 0)
+    } else {
+      const clickOffset = event.clientX - rect.left - metrics.horizontalThumbSize / 2
+      const travel = Math.max(rect.width - metrics.horizontalThumbSize, 1)
+      const nextRatio = Math.min(Math.max(clickOffset / travel, 0), 1)
+      viewport.scrollLeft = nextRatio * Math.max(viewport.scrollWidth - viewport.clientWidth, 0)
+    }
+
+    updateMetrics()
+  }
+
+  const classes = ['scroll-area', className].filter(Boolean).join(' ')
+  const viewportClasses = [
+    'scroll-area-viewport',
+    metrics.verticalVisible ? 'has-vertical-scrollbar' : '',
+    metrics.horizontalVisible ? 'has-horizontal-scrollbar' : '',
+    viewportClassName,
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  return (
+    <div className={classes}>
+      <div ref={setViewportRef} className={viewportClasses} onScroll={handleScroll}>
+        {children}
+      </div>
+      {metrics.verticalVisible ? (
+        <div
+          className="scroll-area-track vertical"
+          onPointerDown={(event) => handleTrackPress('y', event)}
+          style={{ bottom: metrics.horizontalVisible ? CUSTOM_SCROLLBAR_SIZE + CUSTOM_SCROLLBAR_GAP : CUSTOM_SCROLLBAR_INSET }}
+        >
+          <div
+            className="scroll-area-thumb"
+            onPointerDown={(event) => startThumbDrag('y', event)}
+            style={{ height: metrics.verticalThumbSize, transform: `translateY(${metrics.verticalThumbOffset}px)` }}
+          />
+        </div>
+      ) : null}
+      {metrics.horizontalVisible ? (
+        <div
+          className="scroll-area-track horizontal"
+          onPointerDown={(event) => handleTrackPress('x', event)}
+          style={{ right: metrics.verticalVisible ? CUSTOM_SCROLLBAR_SIZE + CUSTOM_SCROLLBAR_GAP : CUSTOM_SCROLLBAR_INSET }}
+        >
+          <div
+            className="scroll-area-thumb"
+            onPointerDown={(event) => startThumbDrag('x', event)}
+            style={{ width: metrics.horizontalThumbSize, transform: `translateX(${metrics.horizontalThumbOffset}px)` }}
+          />
+        </div>
+      ) : null}
+    </div>
+  )
+}
 
 function App() {
   const [resource, setResource] = useState<ResourceKey>('containers')
@@ -157,34 +398,36 @@ function App() {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="brand-block">
-          <p className="eyebrow">Local Docker</p>
-          <h1>Dockit</h1>
-          <p className="brand-copy">Compact runtime control</p>
-        </div>
+        <ScrollArea className="sidebar-scroll-area" viewportClassName="sidebar-scroll-viewport">
+          <div className="brand-block">
+            <p className="eyebrow">Local Docker</p>
+            <h1>Dockit</h1>
+            <p className="brand-copy">Compact runtime control</p>
+          </div>
 
-        <nav className="nav">
-          {resources.map((item) => (
-            <button
-                key={item.key}
-                type="button"
-                className={resource === item.key ? 'nav-item active' : 'nav-item'}
-                onClick={() => {
-                  setResource(item.key)
-                  setSearch('')
-                  setSelectedResourceId('')
-                  setDetailTab('info')
-                }}
-            >
-              <span>
-                <strong>{item.label}</strong>
-              </span>
-              <span className="nav-count">{counts[item.key]}</span>
-            </button>
-          ))}
-        </nav>
+          <nav className="nav">
+            {resources.map((item) => (
+              <button
+                  key={item.key}
+                  type="button"
+                  className={resource === item.key ? 'nav-item active' : 'nav-item'}
+                  onClick={() => {
+                    setResource(item.key)
+                    setSearch('')
+                    setSelectedResourceId('')
+                    setDetailTab('info')
+                  }}
+              >
+                <span>
+                  <strong>{item.label}</strong>
+                </span>
+                <span className="nav-count">{counts[item.key]}</span>
+              </button>
+            ))}
+          </nav>
 
-        <StatusPanel status={currentStatus} loading={statusQuery.isLoading} />
+          <StatusPanel status={currentStatus} loading={statusQuery.isLoading} />
+        </ScrollArea>
       </aside>
 
       <main className="main-panel">
@@ -386,7 +629,7 @@ function ContainersSection({
             </div>
             <span className="list-count">{items.length}</span>
           </div>
-          <div className="resource-list">
+          <ScrollArea className="resource-list-scroll-area" viewportClassName="resource-list">
             {items.map((item) => {
               const running = item.state === 'running'
               const actionLabel = running ? 'Stop container' : 'Start container'
@@ -407,12 +650,12 @@ function ContainersSection({
                   <div className="resource-item-copy">
                     <div className="resource-item-head">
                       <strong>{item.name}</strong>
-                      <span className={running ? 'pill success' : 'pill muted'}>{item.state}</span>
                     </div>
                     <small>{item.image}</small>
                     <span className="resource-meta-line uptime-line">{item.status}</span>
                   </div>
                   <div className="resource-item-actions">
+                    <span className={running ? 'pill success' : 'pill muted'}>{item.state}</span>
                     <ActionIconButton
                       label={actionLabel}
                       tone="ghost"
@@ -428,7 +671,7 @@ function ContainersSection({
                 </article>
               )
             })}
-          </div>
+          </ScrollArea>
           {menuState ? (
             <ContainerContextMenu
               item={menuState.item}
@@ -575,7 +818,7 @@ function ImagesSection({
                 </div>
                 <span className="list-count">{items.length}</span>
               </div>
-              <div className="resource-list">
+              <ScrollArea className="resource-list-scroll-area" viewportClassName="resource-list">
                 {items.map((item) => (
                   <article
                     key={item.id}
@@ -586,17 +829,17 @@ function ImagesSection({
                     }}
                   >
                     <div className="resource-item-copy">
-                    <div className="resource-item-head">
-                      <strong>{item.primaryTag || '<untagged>'}</strong>
-                      <span className="pill info">{item.containers} refs</span>
+                      <div className="resource-item-head">
+                        <strong>{item.primaryTag || '<untagged>'}</strong>
+                        <span className="pill info">{item.containers} refs</span>
+                      </div>
+                      <small>{shortenId(item.id)}</small>
+                      <span className="resource-meta-line">{item.tags[1] ?? item.tags[0] ?? 'No tags'}</span>
+                      <span className="resource-meta-line">{formatBytes(item.size)} • {formatDateTime(item.created)}</span>
                     </div>
-                    <small>{shortenId(item.id)}</small>
-                    <span className="resource-meta-line">{item.tags[1] ?? item.tags[0] ?? 'No tags'}</span>
-                    <span className="resource-meta-line">{formatBytes(item.size)} • {formatDateTime(item.created)}</span>
-                  </div>
-                </article>
-              ))}
-              </div>
+                  </article>
+                ))}
+              </ScrollArea>
             </section>
           }
           detail={
@@ -650,7 +893,7 @@ function VolumesSection({
             </div>
             <span className="list-count">{items.length}</span>
           </div>
-          <div className="resource-list">
+          <ScrollArea className="resource-list-scroll-area" viewportClassName="resource-list">
             {items.map((item) => (
               <article
                 key={item.name}
@@ -671,7 +914,7 @@ function VolumesSection({
                 </div>
               </article>
             ))}
-          </div>
+          </ScrollArea>
         </section>
       }
       detail={
@@ -723,7 +966,7 @@ function NetworksSection({
             </div>
             <span className="list-count">{items.length}</span>
           </div>
-          <div className="resource-list">
+          <ScrollArea className="resource-list-scroll-area" viewportClassName="resource-list">
             {items.map((item) => (
               <article
                 key={item.id}
@@ -744,7 +987,7 @@ function NetworksSection({
                 </div>
               </article>
             ))}
-          </div>
+          </ScrollArea>
         </section>
       }
       detail={
@@ -820,7 +1063,7 @@ function ContainerDetailPane({
       ) : selectedTab === 'inspect' ? (
         <InspectPanel data={inspectData} loading={inspectLoading} error={inspectError} />
       ) : (
-        <div className="detail-stack">
+        <ScrollArea className="detail-stack-scroll-area" viewportClassName="detail-stack">
           <KeyValueSection
             title="Overview"
             rows={[
@@ -865,7 +1108,7 @@ function ContainerDetailPane({
               ]}
             />
           ) : null}
-        </div>
+        </ScrollArea>
       )}
     </>
   )
@@ -891,7 +1134,7 @@ function ImageDetailPane({ item, selectedTab, inspectData, inspectLoading, inspe
       {selectedTab === 'inspect' ? (
         <InspectPanel data={inspectData} loading={inspectLoading} error={inspectError} />
       ) : (
-        <div className="detail-stack">
+        <ScrollArea className="detail-stack-scroll-area" viewportClassName="detail-stack">
           <KeyValueSection
             title="Overview"
             rows={[
@@ -907,7 +1150,7 @@ function ImageDetailPane({ item, selectedTab, inspectData, inspectLoading, inspe
           <SimpleTableSection title="Tags" columns={['Tag']} rows={(item.tags.length ? item.tags : ['No tags']).map((tag) => [tag])} />
           <SimpleTableSection title="Repo digests" columns={['Digest']} rows={(repoDigests.length ? repoDigests : ['No repo digests']).map((digest) => [digest])} />
           <SimpleTableSection title="Labels" columns={['Key', 'Value']} rows={labels.length ? labels : [['No labels', '']]} />
-        </div>
+        </ScrollArea>
       )}
     </>
   )
@@ -932,7 +1175,7 @@ function VolumeDetailPane({ item, selectedTab, inspectData, inspectLoading, insp
       {selectedTab === 'inspect' ? (
         <InspectPanel data={inspectData} loading={inspectLoading} error={inspectError} />
       ) : (
-        <div className="detail-stack">
+        <ScrollArea className="detail-stack-scroll-area" viewportClassName="detail-stack">
           <KeyValueSection
             title="Overview"
             rows={[
@@ -945,7 +1188,7 @@ function VolumeDetailPane({ item, selectedTab, inspectData, inspectLoading, insp
           />
           <SimpleTableSection title="Options" columns={['Key', 'Value']} rows={options.length ? options : [['No options', '']]} />
           <SimpleTableSection title="Labels" columns={['Key', 'Value']} rows={labels.length ? labels : [['No labels', '']]} />
-        </div>
+        </ScrollArea>
       )}
     </>
   )
@@ -971,7 +1214,7 @@ function NetworkDetailPane({ item, selectedTab, inspectData, inspectLoading, ins
       {selectedTab === 'inspect' ? (
         <InspectPanel data={inspectData} loading={inspectLoading} error={inspectError} />
       ) : (
-        <div className="detail-stack">
+        <ScrollArea className="detail-stack-scroll-area" viewportClassName="detail-stack">
           <KeyValueSection
             title="Overview"
             rows={[
@@ -996,7 +1239,7 @@ function NetworkDetailPane({ item, selectedTab, inspectData, inspectLoading, ins
             }
           />
           <SimpleTableSection title="Labels" columns={['Key', 'Value']} rows={labels.length ? labels : [['No labels', '']]} />
-        </div>
+        </ScrollArea>
       )}
     </>
   )
@@ -1046,7 +1289,7 @@ function SimpleTableSection({ title, columns, rows }: { title: string; columns: 
   return (
     <section className="detail-surface">
       <h4>{title}</h4>
-      <div className="detail-table-wrap">
+      <ScrollArea className="detail-table-scroll-area" viewportClassName="detail-table-wrap">
         <table className="resource-table detail-table">
           <thead>
             <tr>
@@ -1065,7 +1308,7 @@ function SimpleTableSection({ title, columns, rows }: { title: string; columns: 
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollArea>
     </section>
   )
 }
@@ -1076,7 +1319,9 @@ function InspectPanel({ data, loading, error }: { data?: InspectPayload; loading
 
   return (
     <section className="detail-surface inspect-surface">
-      <pre>{JSON.stringify(data ?? {}, null, 2)}</pre>
+      <ScrollArea className="code-scroll-area" viewportClassName="code-scroll-viewport">
+        <pre>{JSON.stringify(data ?? {}, null, 2)}</pre>
+      </ScrollArea>
     </section>
   )
 }
@@ -1094,7 +1339,7 @@ function LiveLogViewer({
   const [filter, setFilter] = useState('')
   const [streamError, setStreamError] = useState<string | null>(null)
   const [transportLabel, setTransportLabel] = useState<'stream' | 'fallback'>('stream')
-  const logRef = useRef<HTMLPreElement | null>(null)
+  const logRef = useRef<HTMLDivElement | null>(null)
   const lastStreamAtRef = useRef(0)
   const filteredBody = useMemo(() => filterLogBody(body, filter), [body, filter])
 
@@ -1231,7 +1476,9 @@ function LiveLogViewer({
           </div>
         </div>
       </div>
-      <pre ref={logRef} onScroll={handleScroll}>{filteredBody}</pre>
+      <ScrollArea className="code-scroll-area" viewportClassName="code-scroll-viewport" viewportRef={logRef} onScroll={handleScroll}>
+        <pre>{filteredBody}</pre>
+      </ScrollArea>
     </section>
   )
 }
@@ -1317,7 +1564,7 @@ function IconFrame({ path }: { path: string }) {
   )
 }
 
-function isNearBottom(element: HTMLPreElement) {
+function isNearBottom(element: HTMLElement) {
   return element.scrollHeight - element.scrollTop - element.clientHeight < 32
 }
 

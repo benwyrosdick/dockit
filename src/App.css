@@ -7,19 +7,42 @@
   overflow: hidden;
 }
 
+:root {
+  --scrollbar-size: 10px;
+  --scrollbar-radius: 999px;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.24);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
+  --scrollbar-track: rgba(255, 255, 255, 0.06);
+  --scrollbar-gap: 0.45rem;
+  --scrollbar-inset: 4px;
+}
+
 .sidebar {
   display: flex;
   flex-direction: column;
   gap: 1rem;
   min-height: 0;
-  padding: 1rem 0.75rem;
+  padding: 0;
   border: 1px solid var(--border);
   border-radius: 18px;
   background:
     linear-gradient(180deg, rgba(59, 65, 71, 0.96), rgba(47, 52, 57, 0.96));
   color: #eef6fb;
-  overflow-y: auto;
+  overflow: hidden;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.sidebar-scroll-area {
+  flex: 1;
+  min-height: 0;
+}
+
+.sidebar-scroll-viewport {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100%;
+  padding: 1rem 0.75rem;
 }
 
 .sidebar h1,
@@ -244,9 +267,15 @@
 .resource-list {
   display: block;
   min-height: 0;
-  overflow-y: auto;
-  padding-right: 0.15rem;
   border-top: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.resource-list-scroll-area,
+.detail-stack-scroll-area,
+.detail-table-scroll-area,
+.code-scroll-area {
+  flex: 1;
+  min-height: 0;
 }
 
 .resource-list-item {
@@ -282,8 +311,12 @@
 
 .resource-item-actions {
   display: flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
   flex-shrink: 0;
+  min-width: 2.6rem;
 }
 
 .resource-item-actions .icon-button.ghost {
@@ -435,8 +468,7 @@
   display: grid;
   gap: 0.7rem;
   min-height: 0;
-  overflow-y: auto;
-  padding-right: 0.25rem;
+  align-content: start;
 }
 
 .detail-surface {
@@ -470,7 +502,7 @@
 }
 
 .detail-table-wrap {
-  overflow: auto;
+  min-width: 0;
 }
 
 .detail-table {
@@ -486,19 +518,103 @@
   padding: 0;
 }
 
-.inspect-surface pre,
-.live-log-viewer pre,
+.scroll-area {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.scroll-area-viewport {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scroll-area-viewport::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.scroll-area-viewport.has-vertical-scrollbar {
+  padding-right: calc(var(--scrollbar-size) + var(--scrollbar-gap));
+}
+
+.scroll-area-viewport.has-horizontal-scrollbar {
+  padding-bottom: calc(var(--scrollbar-size) + var(--scrollbar-gap));
+}
+
+.scroll-area-track {
+  position: absolute;
+  border-radius: var(--scrollbar-radius);
+  background: var(--scrollbar-track);
+}
+
+.scroll-area-track.vertical {
+  top: var(--scrollbar-inset);
+  right: var(--scrollbar-inset);
+  bottom: var(--scrollbar-inset);
+  width: var(--scrollbar-size);
+}
+
+.scroll-area-track.horizontal {
+  left: var(--scrollbar-inset);
+  right: var(--scrollbar-inset);
+  bottom: var(--scrollbar-inset);
+  height: var(--scrollbar-size);
+}
+
+.scroll-area-thumb {
+  position: absolute;
+  border-radius: var(--scrollbar-radius);
+  background: var(--scrollbar-thumb);
+  cursor: grab;
+  transition: background 140ms ease;
+}
+
+.scroll-area-track.vertical .scroll-area-thumb {
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2rem;
+}
+
+.scroll-area-track.horizontal .scroll-area-thumb {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2rem;
+}
+
+.scroll-area-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+.scroll-area-thumb:active {
+  cursor: grabbing;
+}
+
+.code-scroll-viewport,
 .viewer pre {
   flex: 1;
   min-height: 0;
   margin: 0;
   padding: 0.9rem 1rem;
-  overflow: auto;
   background: #1b2023;
   color: #d8e0e7;
   font-family: var(--mono);
   font-size: 0.8rem;
   line-height: 1.45;
+}
+
+.code-scroll-viewport pre,
+.viewer pre {
+  margin: 0;
+  min-width: max-content;
+  white-space: pre;
 }
 
 .live-log-viewer {
