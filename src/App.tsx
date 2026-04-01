@@ -851,7 +851,7 @@ function ImagesSection({
                   >
                     <div className="resource-item-copy">
                       <div className="resource-item-head">
-                        <strong>{item.primaryTag || '<untagged>'}</strong>
+                        <strong>{renderImageListTag(item.primaryTag || '<untagged>')}</strong>
                         <span className="pill info">{item.containers} refs</span>
                       </div>
                       <small>{shortenId(item.id)}</small>
@@ -2045,6 +2045,23 @@ function filterNetworks(items: NetworkSummary[], search: string) {
 
 function imageSortLabel(item: ImageSummary) {
   return item.primaryTag || item.tags[0] || item.id
+}
+
+function renderImageListTag(tag: string) {
+  const separatorIndex = tag.lastIndexOf(':')
+  const slashIndex = tag.lastIndexOf('/')
+
+  if (separatorIndex <= slashIndex || separatorIndex === -1) {
+    return tag
+  }
+
+  return (
+    <>
+      <span className="image-tag-name">{tag.slice(0, separatorIndex)}</span>
+      <span className="image-tag-separator">:</span>
+      <span className="image-tag-version">{tag.slice(separatorIndex + 1)}</span>
+    </>
+  )
 }
 
 function networkFlags(item: NetworkSummary) {
