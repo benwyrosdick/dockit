@@ -1,6 +1,8 @@
 import { invoke } from '@tauri-apps/api/core'
 import type {
+  ContainerStats,
   ContainerSummary,
+  ContainerTop,
   DockerStatus,
   ImageSummary,
   InspectPayload,
@@ -46,6 +48,14 @@ export function stopContainerLogStream(streamId: string) {
 
 export function inspectContainer(id: string) {
   return invoke<InspectPayload>('inspect_container', { id })
+}
+
+export function containerStats(id: string) {
+  return invoke<ContainerStats>('container_stats', { id })
+}
+
+export function containerTop(id: string) {
+  return invoke<ContainerTop>('container_top', { id })
 }
 
 export function listImages() {

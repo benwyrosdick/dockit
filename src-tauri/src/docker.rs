@@ -1,16 +1,17 @@
 use bollard::errors::Error as BollardError;
 use bollard::models::{
-    ContainerSummary as DockerContainerSummary, ImageSummary as DockerImageSummary, SystemVersion,
+    ContainerStatsResponse, ContainerSummary as DockerContainerSummary,
+    ImageSummary as DockerImageSummary, SystemVersion,
 };
 use bollard::query_parameters::{
     CreateImageOptionsBuilder, InspectContainerOptionsBuilder, InspectNetworkOptionsBuilder,
     ListContainersOptionsBuilder, ListImagesOptionsBuilder, ListNetworksOptionsBuilder,
-    ListVolumesOptionsBuilder, LogsOptionsBuilder, RemoveContainerOptionsBuilder,
-    RemoveImageOptionsBuilder, RemoveVolumeOptionsBuilder, RestartContainerOptionsBuilder,
-    StartContainerOptions, StopContainerOptionsBuilder,
+    ListVolumesOptionsBuilder, LogsOptionsBuilder, RemoveContainerOptionsBuilder, RemoveImageOptionsBuilder,
+    RemoveVolumeOptionsBuilder, RestartContainerOptionsBuilder, StartContainerOptions,
+    StatsOptionsBuilder, StopContainerOptionsBuilder, TopOptionsBuilder,
 };
 use bollard::Docker;
-use futures_util::TryStreamExt;
+use futures_util::{StreamExt, TryStreamExt};
 use serde::Serialize;
 use serde_json::Value;
 use thiserror::Error;
@@ -21,6 +22,8 @@ pub enum DockitError {
     Docker(#[from] BollardError),
     #[error("Serialization failed: {0}")]
     Serialize(#[from] serde_json::Error),
+    #[error("{0}")]
+    Message(String),
 }
 
 pub type DockitResult<T> = Result<T, DockitError>;
@@ -78,6 +81,28 @@ pub struct NetworkSummary {
     pub internal: bool,
     pub attachable: bool,
     pub created: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerStatsSummary {
+    pub read_at: Option<String>,
+    pub cpu_percent: Option<f64>,
+    pub memory_usage: Option<u64>,
+    pub memory_limit: Option<u64>,
+    pub memory_percent: Option<f64>,
+    pub network_rx: u64,
+    pub network_tx: u64,
+    pub block_read: u64,
+    pub block_write: u64,
+    pub pids: Option<u64>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerTopSummary {
+    pub titles: Vec<String>,
+    pub processes: Vec<Vec<String>>,
 }
 
 fn docker() -> DockitResult<Docker> {
@@ -202,6 +227,39 @@ pub async fn inspect_container(id: &str) -> DockitResult<Value> {
             .inspect_container(id, Some(InspectContainerOptionsBuilder::new().build()))
             .await?,
     )?)
+}
+
+pub async fn container_stats(id: &str) -> DockitResult<ContainerStatsSummary> {
+    let mut stream = docker()?.stats(
+        id,
+        Some(
+            StatsOptionsBuilder::new()
+                .stream(false)
+                .one_shot(true)
+                .build(),
+        ),
+    );
+
+    match stream.next().await.transpose()? {
+        Some(stats) => Ok(map_container_stats(stats)),
+        None => Err(DockitError::Message(
+            "Docker returned no stats for this container".into(),
+        )),
+    }
+}
+
+pub async fn container_top(id: &str) -> DockitResult<ContainerTopSummary> {
+    let top = docker()?
+        .top_processes(
+            id,
+            Some(TopOptionsBuilder::new().ps_args("aux").build()),
+        )
+        .await?;
+
+    Ok(ContainerTopSummary {
+        titles: top.titles.unwrap_or_default(),
+        processes: top.processes.unwrap_or_default(),
+    })
 }
 
 pub async fn list_images() -> DockitResult<Vec<ImageSummary>> {
@@ -368,4 +426,114 @@ fn map_image(image: DockerImageSummary) -> ImageSummary {
         created: image.created,
         containers: image.containers,
     }
+}
+
+fn map_container_stats(stats: ContainerStatsResponse) -> ContainerStatsSummary {
+    let cpu_delta = stats
+        .cpu_stats
+        .as_ref()
+        .and_then(|cpu| cpu.cpu_usage.as_ref())
+        .and_then(|usage| usage.total_usage)
+        .unwrap_or(0)
+        .saturating_sub(
+            stats
+                .precpu_stats
+                .as_ref()
+                .and_then(|cpu| cpu.cpu_usage.as_ref())
+                .and_then(|usage| usage.total_usage)
+                .unwrap_or(0),
+        );
+
+    let system_delta = stats
+        .cpu_stats
+        .as_ref()
+        .and_then(|cpu| cpu.system_cpu_usage)
+        .unwrap_or(0)
+        .saturating_sub(
+            stats
+                .precpu_stats
+                .as_ref()
+                .and_then(|cpu| cpu.system_cpu_usage)
+                .unwrap_or(0),
+        );
+
+    let cpu_count = stats
+        .cpu_stats
+        .as_ref()
+        .and_then(|cpu| cpu.online_cpus)
+        .map(u64::from)
+        .or_else(|| {
+            stats
+                .cpu_stats
+                .as_ref()
+                .and_then(|cpu| cpu.cpu_usage.as_ref())
+                .and_then(|usage| usage.percpu_usage.as_ref())
+                .map(|cores| cores.len() as u64)
+        })
+        .unwrap_or(1);
+
+    let cpu_percent = if cpu_delta > 0 && system_delta > 0 {
+        Some((cpu_delta as f64 / system_delta as f64) * cpu_count as f64 * 100.0)
+    } else {
+        None
+    };
+
+    let memory_usage = stats.memory_stats.as_ref().and_then(|memory| memory.usage);
+    let memory_limit = stats.memory_stats.as_ref().and_then(|memory| memory.limit);
+    let memory_percent = match (memory_usage, memory_limit) {
+        (Some(usage), Some(limit)) if limit > 0 => Some((usage as f64 / limit as f64) * 100.0),
+        _ => None,
+    };
+
+    let (network_rx, network_tx) = stats
+        .networks
+        .as_ref()
+        .map(|networks| {
+            networks.values().fold((0_u64, 0_u64), |(rx, tx), network| {
+                (
+                    rx + network.rx_bytes.unwrap_or(0),
+                    tx + network.tx_bytes.unwrap_or(0),
+                )
+            })
+        })
+        .unwrap_or((0, 0));
+
+    let block_entries = stats
+        .blkio_stats
+        .as_ref()
+        .and_then(|blkio| blkio.io_service_bytes_recursive.as_ref());
+
+    ContainerStatsSummary {
+        read_at: stats.read.map(|read| read.to_string()),
+        cpu_percent,
+        memory_usage,
+        memory_limit,
+        memory_percent,
+        network_rx,
+        network_tx,
+        block_read: sum_blkio_bytes(block_entries, "read"),
+        block_write: sum_blkio_bytes(block_entries, "write"),
+        pids: stats.pids_stats.and_then(|pids| pids.current),
+    }
+}
+
+fn sum_blkio_bytes(
+    entries: Option<&Vec<bollard::models::ContainerBlkioStatEntry>>,
+    op: &str,
+) -> u64 {
+    entries
+        .map(|entries| {
+            entries
+                .iter()
+                .filter(|entry| {
+                    entry
+                        .op
+                        .as_deref()
+                        .map(|candidate| candidate.eq_ignore_ascii_case(op))
+                        .unwrap_or(false)
+                })
+                .map(|entry| entry.value.unwrap_or(0))
+                .sum()
+        })
+        .unwrap_or(0)
 }

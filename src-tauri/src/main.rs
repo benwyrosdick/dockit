@@ -146,6 +146,20 @@ async fn inspect_container(id: String) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
+async fn container_stats(id: String) -> Result<docker_api::ContainerStatsSummary, String> {
+    docker_api::container_stats(&id)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn container_top(id: String) -> Result<docker_api::ContainerTopSummary, String> {
+    docker_api::container_top(&id)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 async fn list_images() -> Result<Vec<docker_api::ImageSummary>, String> {
     docker_api::list_images().await.map_err(|error| error.to_string())
 }
@@ -223,6 +237,8 @@ fn main() {
             start_container_log_stream,
             stop_container_log_stream,
             inspect_container,
+            container_stats,
+            container_top,
             list_images,
             remove_image,
             inspect_image,

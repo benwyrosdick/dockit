@@ -16,6 +16,24 @@ export type ContainerSummary = {
   ports: string[]
 }
 
+export type ContainerStats = {
+  readAt?: string | null
+  cpuPercent?: number | null
+  memoryUsage?: number | null
+  memoryLimit?: number | null
+  memoryPercent?: number | null
+  networkRx: number
+  networkTx: number
+  blockRead: number
+  blockWrite: number
+  pids?: number | null
+}
+
+export type ContainerTop = {
+  titles: string[]
+  processes: string[][]
+}
+
 export type ImageSummary = {
   id: string
   tags: string[]

@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { listen } from '@tauri-apps/api/event'
 import './App.css'
 import {
+  containerStats,
+  containerTop,
   dockerStatus,
   inspectContainer,
   inspectImage,
@@ -23,7 +25,9 @@ import {
 } from './lib/api'
 import { formatBytes, formatDateTime, shortenId } from './lib/format'
 import type {
+  ContainerStats,
   ContainerSummary,
+  ContainerTop,
   DockerStatus,
   ImageSummary,
   InspectPayload,
@@ -33,7 +37,7 @@ import type {
 
 type ResourceKey = 'containers' | 'images' | 'volumes' | 'networks'
 
-type DetailTab = 'info' | 'logs' | 'inspect'
+type DetailTab = 'info' | 'logs' | 'stats' | 'top' | 'inspect'
 type AnsiStyle = {
   color?: string
   backgroundColor?: string
@@ -1042,6 +1046,18 @@ function ContainerDetailPane({
     queryFn: () => containerLogs(item.id),
     enabled: selectedTab === 'logs',
   })
+  const statsQuery = useQuery({
+    queryKey: ['container-stats', item.id],
+    queryFn: () => containerStats(item.id),
+    enabled: selectedTab === 'stats',
+    refetchInterval: 2_000,
+  })
+  const topQuery = useQuery({
+    queryKey: ['container-top', item.id],
+    queryFn: () => containerTop(item.id),
+    enabled: selectedTab === 'top',
+    refetchInterval: 4_000,
+  })
   const inspect = asRecord(inspectData)
   const config = asRecord(inspect.Config)
   const state = asRecord(inspect.State)
@@ -1057,6 +1073,8 @@ function ContainerDetailPane({
         tabs={[
           { key: 'info', label: 'Info' },
           { key: 'logs', label: 'Logs' },
+          { key: 'stats', label: 'Stats' },
+          { key: 'top', label: 'Top' },
           { key: 'inspect', label: 'Inspect' },
         ]}
         selectedTab={selectedTab}
@@ -1070,6 +1088,10 @@ function ContainerDetailPane({
             <LiveLogViewer key={item.id} containerId={item.id} initialBody={logsQuery.data || 'No log output returned for this container.'} />
           </section>
         )
+      ) : selectedTab === 'stats' ? (
+        <ContainerStatsPanel stats={statsQuery.data} loading={statsQuery.isLoading} error={statsQuery.error} />
+      ) : selectedTab === 'top' ? (
+        <ContainerTopPanel top={topQuery.data} loading={topQuery.isLoading} error={topQuery.error} />
       ) : selectedTab === 'inspect' ? (
         <InspectPanel data={inspectData} loading={inspectLoading} error={inspectError} />
       ) : (
@@ -1146,7 +1168,7 @@ function ImageDetailPane({ item, selectedTab, inspectData, inspectLoading, inspe
   return (
     <>
       <DetailHeader title={item.primaryTag || '<untagged>'} subtitle={shortenId(item.id)} />
-      <DetailTabs tabs={[{ key: 'info', label: 'Info' }, { key: 'inspect', label: 'Inspect' }]} selectedTab={selectedTab === 'logs' ? 'info' : selectedTab} onSelect={onSelectTab} />
+      <DetailTabs tabs={[{ key: 'info', label: 'Info' }, { key: 'inspect', label: 'Inspect' }]} selectedTab={normalizeBasicDetailTab(selectedTab)} onSelect={onSelectTab} />
       {selectedTab === 'inspect' ? (
         <InspectPanel data={inspectData} loading={inspectLoading} error={inspectError} />
       ) : (
@@ -1188,7 +1210,7 @@ function VolumeDetailPane({ item, selectedTab, inspectData, inspectLoading, insp
   return (
     <>
       <DetailHeader title={item.name} subtitle={item.driver} />
-      <DetailTabs tabs={[{ key: 'info', label: 'Info' }, { key: 'inspect', label: 'Inspect' }]} selectedTab={selectedTab === 'logs' ? 'info' : selectedTab} onSelect={onSelectTab} />
+      <DetailTabs tabs={[{ key: 'info', label: 'Info' }, { key: 'inspect', label: 'Inspect' }]} selectedTab={normalizeBasicDetailTab(selectedTab)} onSelect={onSelectTab} />
       {selectedTab === 'inspect' ? (
         <InspectPanel data={inspectData} loading={inspectLoading} error={inspectError} />
       ) : (
@@ -1227,7 +1249,7 @@ function NetworkDetailPane({ item, selectedTab, inspectData, inspectLoading, ins
   return (
     <>
       <DetailHeader title={item.name} subtitle={shortenId(item.id)} />
-      <DetailTabs tabs={[{ key: 'info', label: 'Info' }, { key: 'inspect', label: 'Inspect' }]} selectedTab={selectedTab === 'logs' ? 'info' : selectedTab} onSelect={onSelectTab} />
+      <DetailTabs tabs={[{ key: 'info', label: 'Info' }, { key: 'inspect', label: 'Inspect' }]} selectedTab={normalizeBasicDetailTab(selectedTab)} onSelect={onSelectTab} />
       {selectedTab === 'inspect' ? (
         <InspectPanel data={inspectData} loading={inspectLoading} error={inspectError} />
       ) : (
@@ -1340,6 +1362,54 @@ function InspectPanel({ data, loading, error }: { data?: InspectPayload; loading
         <pre>{JSON.stringify(data ?? {}, null, 2)}</pre>
       </ScrollArea>
     </section>
+  )
+}
+
+function ContainerStatsPanel({ stats, loading, error }: { stats?: ContainerStats; loading: boolean; error: unknown }) {
+  if (loading) return <StatePanel title="Loading stats" copy="Sampling current container resource usage." />
+  if (error) return <StatePanel title="Stats unavailable" copy={String(error)} />
+  if (!stats) return <StatePanel title="No stats returned" copy="Docker did not provide a resource snapshot for this container." />
+
+  return (
+    <ScrollArea className="detail-stack-scroll-area" viewportClassName="detail-stack">
+      <KeyValueSection
+        title="Resource snapshot"
+        rows={[
+          ['Captured', stats.readAt ? formatDateTime(stats.readAt) : '--'],
+          ['CPU', formatPercent(stats.cpuPercent)],
+          ['Memory', formatUsagePair(stats.memoryUsage, stats.memoryLimit)],
+          ['Memory %', formatPercent(stats.memoryPercent)],
+          ['PIDs', stats.pids != null ? String(stats.pids) : '--'],
+        ]}
+      />
+      <KeyValueSection
+        title="Traffic"
+        rows={[
+          ['Network in', formatBytes(stats.networkRx)],
+          ['Network out', formatBytes(stats.networkTx)],
+          ['Block read', formatBytes(stats.blockRead)],
+          ['Block write', formatBytes(stats.blockWrite)],
+        ]}
+      />
+    </ScrollArea>
+  )
+}
+
+function ContainerTopPanel({ top, loading, error }: { top?: ContainerTop; loading: boolean; error: unknown }) {
+  if (loading) return <StatePanel title="Loading processes" copy="Inspecting what is running inside this container." />
+  if (error) return <StatePanel title="Process list unavailable" copy={String(error)} />
+  if (!top) return <StatePanel title="No process data" copy="Docker did not return any process information for this container." />
+
+  if (!top.processes.length) {
+    return <StatePanel title="No running processes" copy="Docker did not report any active processes in this container." />
+  }
+
+  return (
+    <SimpleTableSection
+      title="Processes"
+      columns={top.titles.length ? top.titles : ['Process']}
+      rows={top.processes}
+    />
   )
 }
 
@@ -1665,6 +1735,21 @@ function containerStatusTone(item: ContainerSummary) {
   if (item.state === 'running') return status.includes('unhealthy') ? 'is-unhealthy' : 'is-healthy'
   if (exitCode && exitCode !== '0') return 'is-stopped-error'
   return ''
+}
+
+function normalizeBasicDetailTab(tab: DetailTab): DetailTab {
+  return tab === 'inspect' ? 'inspect' : 'info'
+}
+
+function formatPercent(value?: number | null) {
+  return value == null ? '--' : `${value.toFixed(1)}%`
+}
+
+function formatUsagePair(usage?: number | null, limit?: number | null) {
+  if (usage == null && limit == null) return '--'
+  if (usage != null && limit != null) return `${formatBytes(usage)} / ${formatBytes(limit)}`
+  if (usage != null) return formatBytes(usage)
+  return formatBytes(limit ?? 0)
 }
 
 function ActionIconButton({
