@@ -2,6 +2,10 @@
 
 Desktop app built with React, TypeScript, Vite, and Tauri.
 
+## Screenshot
+
+![Dockit screenshot](docs/screenshot.png)
+
 ## Download
 
 Prebuilt Linux and macOS binaries are published on the GitHub Releases page:
