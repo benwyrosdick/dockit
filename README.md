@@ -55,6 +55,16 @@ Build the desktop app:
 bun run tauri build
 ```
 
+Build just the AppImage on a local rolling-release Linux machine:
+
+```bash
+bun run build:appimage
+```
+
+That script runs the build inside an `ubuntu:22.04` container so AppImage packaging stays compatible even when the host toolchain is newer than `linuxdeploy` expects.
+
+CI also builds an AppImage artifact with `.github/workflows/appimage.yml`.
+
 ## Lint
 
 ```bash
