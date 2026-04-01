@@ -398,12 +398,26 @@
   color: #88e8c8;
 }
 
+.resource-item-copy .container-name.is-starting,
+.resource-meta-line.uptime-line.is-starting {
+  color: #93c5fd;
+}
+
 .resource-item-copy .container-name.is-unhealthy {
   color: #fcd34d;
 }
 
-.resource-item-copy .container-name.is-stopped {
+.resource-item-copy .container-name.is-stopped-error,
+.resource-meta-line.uptime-line.is-stopped-error {
   color: #fca5a5;
+}
+
+.resource-meta-line.uptime-line.is-healthy {
+  color: #a7f3d0;
+}
+
+.resource-meta-line.uptime-line.is-unhealthy {
+  color: #fcd34d;
 }
 
 .resource-item-copy small,

@@ -641,7 +641,9 @@ function ContainersSection({
             {items.map((item) => {
               const running = item.state === 'running'
               const actionLabel = running ? 'Stop container' : 'Start container'
-              const nameClassName = ['container-name', containerNameTone(item)].join(' ')
+              const statusTone = containerStatusTone(item)
+              const nameClassName = ['container-name', statusTone].filter(Boolean).join(' ')
+              const statusClassName = ['resource-meta-line', 'uptime-line', statusTone].filter(Boolean).join(' ')
               return (
                 <article
                   key={item.id}
@@ -661,7 +663,7 @@ function ContainersSection({
                       <strong className={nameClassName}>{item.name}</strong>
                     </div>
                     <small>{item.image}</small>
-                    <span className="resource-meta-line uptime-line">{item.status}</span>
+                    <span className={statusClassName}>{item.status}</span>
                   </div>
                   <div className="resource-item-actions">
                     <ActionIconButton
@@ -1649,9 +1651,14 @@ function envRowsFromList(entries: string[]) {
   })
 }
 
-function containerNameTone(item: ContainerSummary) {
-  if (item.state !== 'running') return 'is-stopped'
-  return item.status.toLowerCase().includes('unhealthy') ? 'is-unhealthy' : 'is-healthy'
+function containerStatusTone(item: ContainerSummary) {
+  const status = item.status.toLowerCase()
+  const exitCode = status.match(/exited\s*\((\d+)\)/)?.[1]
+
+  if (status.includes('starting')) return 'is-starting'
+  if (item.state === 'running') return status.includes('unhealthy') ? 'is-unhealthy' : 'is-healthy'
+  if (exitCode && exitCode !== '0') return 'is-stopped-error'
+  return ''
 }
 
 function ActionIconButton({
