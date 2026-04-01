@@ -48,6 +48,14 @@ type AnsiStyle = {
 }
 
 type ContainerQuickAction = 'start' | 'stop' | 'restart' | 'delete'
+type StatsHistoryPoint = {
+  at: number
+  cpu: number | null
+  memory: number | null
+  networkRate: number | null
+}
+
+const STATS_HISTORY_WINDOW_MS = 60_000
 
 const resources: Array<{
   key: ResourceKey
@@ -1089,7 +1097,7 @@ function ContainerDetailPane({
           </section>
         )
       ) : selectedTab === 'stats' ? (
-        <ContainerStatsPanel stats={statsQuery.data} loading={statsQuery.isLoading} error={statsQuery.error} />
+        <ContainerStatsPanel key={item.id} stats={statsQuery.data} loading={statsQuery.isLoading} error={statsQuery.error} />
       ) : selectedTab === 'top' ? (
         <ContainerTopPanel top={topQuery.data} loading={topQuery.isLoading} error={topQuery.error} />
       ) : selectedTab === 'inspect' ? (
@@ -1366,12 +1374,45 @@ function InspectPanel({ data, loading, error }: { data?: InspectPayload; loading
 }
 
 function ContainerStatsPanel({ stats, loading, error }: { stats?: ContainerStats; loading: boolean; error: unknown }) {
+  const [history, setHistory] = useState<StatsHistoryPoint[]>([])
+  const previousNetworkRef = useRef<{ at: number; total: number } | null>(null)
+
+  useEffect(() => {
+    if (!stats?.readAt) return
+
+    const nextAt = Date.parse(stats.readAt)
+    if (Number.isNaN(nextAt)) return
+
+    const nextNetworkTotal = stats.networkRx + stats.networkTx
+    const previousNetwork = previousNetworkRef.current
+    const elapsedMs = previousNetwork ? nextAt - previousNetwork.at : 0
+    const networkRate = previousNetwork && elapsedMs > 0
+      ? Math.max((nextNetworkTotal - previousNetwork.total) / (elapsedMs / 1000), 0)
+      : null
+
+    const nextPoint: StatsHistoryPoint = {
+      at: nextAt,
+      cpu: stats.cpuPercent ?? null,
+      memory: stats.memoryPercent ?? null,
+      networkRate,
+    }
+
+    previousNetworkRef.current = { at: nextAt, total: nextNetworkTotal }
+
+    setHistory((current) => {
+      if (current.at(-1)?.at === nextPoint.at) return current
+      const cutoff = nextPoint.at - STATS_HISTORY_WINDOW_MS
+      return [...current, nextPoint].filter((point) => point.at >= cutoff)
+    })
+  }, [stats])
+
   if (loading) return <StatePanel title="Loading stats" copy="Sampling current container resource usage." />
   if (error) return <StatePanel title="Stats unavailable" copy={String(error)} />
   if (!stats) return <StatePanel title="No stats returned" copy="Docker did not provide a resource snapshot for this container." />
 
   return (
     <ScrollArea className="detail-stack-scroll-area" viewportClassName="detail-stack">
+      <StatsHistorySection history={history} />
       <KeyValueSection
         title="Resource snapshot"
         rows={[
@@ -1392,6 +1433,95 @@ function ContainerStatsPanel({ stats, loading, error }: { stats?: ContainerStats
         ]}
       />
     </ScrollArea>
+  )
+}
+
+function StatsHistorySection({ history }: { history: StatsHistoryPoint[] }) {
+  const latest = history.at(-1)
+
+  return (
+    <section className="detail-surface stats-history-surface">
+      <div className="stats-history-head">
+        <h4>Recent activity</h4>
+        <span>{history.length ? 'Last 60 seconds' : 'Waiting for samples'}</span>
+      </div>
+      <div className="stats-sparkline-grid">
+        <SparklineCard
+          label="CPU"
+          value={formatPercent(latest?.cpu)}
+          accent="var(--spark-cpu)"
+          series={history}
+          getValue={(point) => point.cpu}
+          formatAxisLabel={formatPercent}
+          domain={[0, 100]}
+        />
+        <SparklineCard
+          label="Memory"
+          value={formatPercent(latest?.memory)}
+          accent="var(--spark-memory)"
+          series={history}
+          getValue={(point) => point.memory}
+          formatAxisLabel={formatPercent}
+          domain={[0, 100]}
+        />
+        <SparklineCard
+          label="Network"
+          value={formatRate(latest?.networkRate)}
+          accent="var(--spark-network)"
+          series={history}
+          getValue={(point) => point.networkRate}
+          formatAxisLabel={formatRate}
+        />
+      </div>
+    </section>
+  )
+}
+
+function SparklineCard({
+  label,
+  value,
+  accent,
+  series,
+  getValue,
+  formatAxisLabel,
+  domain,
+}: {
+  label: string
+  value: string
+  accent: string
+  series: StatsHistoryPoint[]
+  getValue: (point: StatsHistoryPoint) => number | null
+  formatAxisLabel: (value?: number | null) => string
+  domain?: [number, number]
+}) {
+  const values = series.map(getValue)
+  const numericSeries = values.filter((point): point is number => point != null)
+  const max = domain?.[1] ?? (numericSeries.length ? Math.max(...numericSeries) : 0)
+  const min = domain?.[0] ?? 0
+  const anchorAt = series.at(-1)?.at ?? Date.now()
+  const { linePath, areaPath } = buildSparklinePaths(series, getValue, anchorAt, min, max)
+
+  return (
+    <article className="sparkline-card">
+      <div className="sparkline-copy">
+        <span className="sparkline-label">{label}</span>
+        <strong>{value}</strong>
+      </div>
+      <div className="sparkline-chart">
+        {linePath ? (
+          <svg viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true">
+            <path className="sparkline-area" d={areaPath} style={{ color: accent }} />
+            <path className="sparkline-line" d={linePath} style={{ color: accent }} />
+          </svg>
+        ) : (
+          <div className="sparkline-empty">Waiting for data</div>
+        )}
+      </div>
+      <div className="sparkline-axis">
+        <span>{formatAxisLabel(max)}</span>
+        <span>{formatAxisLabel(min)}</span>
+      </div>
+    </article>
   )
 }
 
@@ -1750,6 +1880,40 @@ function formatUsagePair(usage?: number | null, limit?: number | null) {
   if (usage != null && limit != null) return `${formatBytes(usage)} / ${formatBytes(limit)}`
   if (usage != null) return formatBytes(usage)
   return formatBytes(limit ?? 0)
+}
+
+function formatRate(value?: number | null) {
+  return value == null ? '--' : `${formatBytes(value)}/s`
+}
+
+function buildSparklinePaths(
+  series: StatsHistoryPoint[],
+  getValue: (point: StatsHistoryPoint) => number | null,
+  anchorAt: number,
+  min: number,
+  max: number,
+) {
+  const points = series
+    .map((point) => {
+      const value = getValue(point)
+      if (value == null) return null
+      const age = anchorAt - point.at
+      if (age > STATS_HISTORY_WINDOW_MS) return null
+      const x = 100 - (age / STATS_HISTORY_WINDOW_MS) * 100
+      const range = max - min
+      const y = range === 0 ? 16 : 32 - ((value - min) / range) * 28 - 2
+      return { x, y }
+    })
+    .filter((point): point is { x: number; y: number } => point !== null)
+
+  if (!points.length) return { linePath: '', areaPath: '' }
+
+  const linePath = `M ${points.map((point) => `${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' L ')}`
+  const firstPoint = points[0]
+  const lastPoint = points[points.length - 1]
+  const areaPath = `${linePath} L ${lastPoint.x.toFixed(2)} 32 L ${firstPoint.x.toFixed(2)} 32 Z`
+
+  return { linePath, areaPath }
 }
 
 function ActionIconButton({

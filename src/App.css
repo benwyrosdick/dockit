@@ -500,6 +500,84 @@
   font-size: 0.88rem;
 }
 
+.stats-history-surface {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.stats-history-head,
+.sparkline-copy,
+.sparkline-axis {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.stats-history-head span,
+.sparkline-label,
+.sparkline-axis {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.stats-sparkline-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.sparkline-card {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.8rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.sparkline-copy strong {
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.sparkline-chart {
+  height: 4.25rem;
+  border-radius: 0.75rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+  overflow: hidden;
+}
+
+.sparkline-chart svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.sparkline-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.sparkline-area {
+  fill: currentColor;
+  opacity: 0.16;
+}
+
+.sparkline-empty {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.sparkline-axis {
+  font-family: var(--mono);
+}
+
 .detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -955,6 +1033,10 @@
   }
 
   .detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-sparkline-grid {
     grid-template-columns: 1fr;
   }
 
