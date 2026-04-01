@@ -650,7 +650,6 @@ function ContainersSection({
                   className={item.id === selected.id ? 'resource-list-item selected' : 'resource-list-item'}
                   onClick={() => {
                     onSelect(item.id)
-                    onSelectTab('info')
                   }}
                   onContextMenu={(event) => {
                     event.preventDefault()
@@ -1068,7 +1067,7 @@ function ContainerDetailPane({
           <StatePanel title="Loading logs" copy="Collecting the latest container output." />
         ) : (
           <section className="detail-surface log-surface">
-            <LiveLogViewer containerId={item.id} initialBody={logsQuery.data || 'No log output returned for this container.'} />
+            <LiveLogViewer key={item.id} containerId={item.id} initialBody={logsQuery.data || 'No log output returned for this container.'} />
           </section>
         )
       ) : selectedTab === 'inspect' ? (
@@ -1365,6 +1364,13 @@ function LiveLogViewer({
     () => (hideTimestamps ? stripLogTimestamps(filteredBody) : filteredBody),
     [filteredBody, hideTimestamps],
   )
+
+  useEffect(() => {
+    setBody(initialBody)
+    setStreamError(null)
+    setTransportLabel('stream')
+    setIsFollowing(true)
+  }, [containerId, initialBody])
 
   useEffect(() => {
     if (!containerId) return
