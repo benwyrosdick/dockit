@@ -641,6 +641,7 @@ function ContainersSection({
             {items.map((item) => {
               const running = item.state === 'running'
               const actionLabel = running ? 'Stop container' : 'Start container'
+              const nameClassName = ['container-name', containerNameTone(item)].join(' ')
               return (
                 <article
                   key={item.id}
@@ -657,13 +658,12 @@ function ContainersSection({
                 >
                   <div className="resource-item-copy">
                     <div className="resource-item-head">
-                      <strong>{item.name}</strong>
+                      <strong className={nameClassName}>{item.name}</strong>
                     </div>
                     <small>{item.image}</small>
                     <span className="resource-meta-line uptime-line">{item.status}</span>
                   </div>
                   <div className="resource-item-actions">
-                    <span className={running ? 'pill success' : 'pill muted'}>{item.state}</span>
                     <ActionIconButton
                       label={actionLabel}
                       tone="ghost"
@@ -1647,6 +1647,11 @@ function envRowsFromList(entries: string[]) {
     if (separatorIndex === -1) return [entry, '--'] as [string, string]
     return [entry.slice(0, separatorIndex), entry.slice(separatorIndex + 1)] as [string, string]
   })
+}
+
+function containerNameTone(item: ContainerSummary) {
+  if (item.state !== 'running') return 'is-stopped'
+  return item.status.toLowerCase().includes('unhealthy') ? 'is-unhealthy' : 'is-healthy'
 }
 
 function ActionIconButton({

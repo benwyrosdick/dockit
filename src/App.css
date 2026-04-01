@@ -394,6 +394,18 @@
   white-space: nowrap;
 }
 
+.resource-item-copy .container-name.is-healthy {
+  color: #88e8c8;
+}
+
+.resource-item-copy .container-name.is-unhealthy {
+  color: #fcd34d;
+}
+
+.resource-item-copy .container-name.is-stopped {
+  color: #fca5a5;
+}
+
 .resource-item-copy small,
 .resource-meta-line {
   color: var(--muted);
@@ -412,12 +424,6 @@
 
 .uptime-line {
   font-size: 0.76rem;
-}
-
-.resource-list-item .pill {
-  flex-shrink: 0;
-  font-size: 0.68rem;
-  padding: 0.18rem 0.42rem;
 }
 
 .detail-pane {
