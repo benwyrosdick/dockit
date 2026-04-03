@@ -44,6 +44,8 @@ pub struct ContainerSummary {
     pub id: String,
     pub name: String,
     pub image: String,
+    pub compose_project: Option<String>,
+    pub compose_service: Option<String>,
     pub state: String,
     pub status: String,
     pub created: i64,
@@ -382,6 +384,8 @@ fn status_from_version(version: SystemVersion) -> DockerStatus {
 }
 
 fn map_container(container: DockerContainerSummary) -> ContainerSummary {
+    let labels = container.labels.unwrap_or_default();
+
     ContainerSummary {
         id: container.id.unwrap_or_default(),
         name: container
@@ -393,6 +397,8 @@ fn map_container(container: DockerContainerSummary) -> ContainerSummary {
             .trim_start_matches('/')
             .to_string(),
         image: container.image.unwrap_or_default(),
+        compose_project: labels.get("com.docker.compose.project").cloned(),
+        compose_service: labels.get("com.docker.compose.service").cloned(),
         state: container
             .state
             .map(|state| state.to_string())

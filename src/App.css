@@ -302,6 +302,30 @@
   box-shadow: inset 2px 0 0 rgba(103, 212, 176, 0.9);
 }
 
+.container-group + .container-group {
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.container-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 0.3rem 0.55rem 0.68rem;
+}
+
+.container-group-title,
+.container-group-count {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.container-group-count {
+  font-family: var(--mono);
+}
+
 .resource-item-copy {
   display: grid;
   gap: 0.05rem;

@@ -10,6 +10,8 @@ export type ContainerSummary = {
   id: string
   name: string
   image: string
+  composeProject?: string | null
+  composeService?: string | null
   state: string
   status: string
   created: number

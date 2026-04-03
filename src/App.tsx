@@ -637,6 +637,7 @@ function ContainersSection({
   if (!items.length) return <StatePanel title="No containers" copy="Start a workload and it will show up here." />
 
   const selected = items.find((item) => item.id === selectedId) ?? items[0]
+  const groupedItems = groupContainersByProject(items)
 
   return (
     <ResourceWorkspace
@@ -650,48 +651,57 @@ function ContainersSection({
             <span className="list-count">{items.length}</span>
           </div>
           <ScrollArea className="resource-list-scroll-area" viewportClassName="resource-list">
-            {items.map((item) => {
-              const running = item.state === 'running'
-              const actionLabel = running ? 'Stop container' : 'Start container'
-              const statusTone = containerStatusTone(item)
-              const nameClassName = ['container-name', statusTone].filter(Boolean).join(' ')
-              const statusClassName = ['resource-meta-line', 'uptime-line', statusTone].filter(Boolean).join(' ')
-              return (
-                <article
-                  key={item.id}
-                  className={item.id === selected.id ? 'resource-list-item selected' : 'resource-list-item'}
-                  onClick={() => {
-                    onSelect(item.id)
-                  }}
-                  onContextMenu={(event) => {
-                    event.preventDefault()
-                    onSelect(item.id)
-                    setMenuState({ item, x: event.clientX, y: event.clientY })
-                  }}
-                >
-                  <div className="resource-item-copy">
-                    <div className="resource-item-head">
-                      <strong className={nameClassName}>{item.name}</strong>
-                    </div>
-                    <small>{item.image}</small>
-                    <span className={statusClassName}>{item.status}</span>
-                  </div>
-                  <div className="resource-item-actions">
-                    <ActionIconButton
-                      label={actionLabel}
-                      tone="ghost"
-                      disabled={busy}
+            {groupedItems.map((group) => (
+              <section key={group.key} className="container-group">
+                <header className="container-group-header">
+                  <span className="container-group-title">{group.label}</span>
+                  <span className="container-group-count">{group.items.length}</span>
+                </header>
+                {group.items.map((item) => {
+                  const running = item.state === 'running'
+                  const actionLabel = running ? 'Stop container' : 'Start container'
+                  const statusTone = containerStatusTone(item)
+                  const nameClassName = ['container-name', statusTone].filter(Boolean).join(' ')
+                  const statusClassName = ['resource-meta-line', 'uptime-line', statusTone].filter(Boolean).join(' ')
+                  return (
+                    <article
+                      key={item.id}
+                      className={item.id === selected.id ? 'resource-list-item selected' : 'resource-list-item'}
                       onClick={() => {
                         onSelect(item.id)
-                        onQuickAction(item)
+                      }}
+                      onContextMenu={(event) => {
+                        event.preventDefault()
+                        onSelect(item.id)
+                        setMenuState({ item, x: event.clientX, y: event.clientY })
                       }}
                     >
-                      {running ? <StopIcon /> : <PlayIcon />}
-                    </ActionIconButton>
-                  </div>
-                </article>
-              )
-            })}
+                      <div className="resource-item-copy">
+                        <div className="resource-item-head">
+                          <strong className={nameClassName}>{item.name}</strong>
+                          {item.composeService ? <span className="pill info">{item.composeService}</span> : null}
+                        </div>
+                        <small>{item.image}</small>
+                        <span className={statusClassName}>{item.status}</span>
+                      </div>
+                      <div className="resource-item-actions">
+                        <ActionIconButton
+                          label={actionLabel}
+                          tone="ghost"
+                          disabled={busy}
+                          onClick={() => {
+                            onSelect(item.id)
+                            onQuickAction(item)
+                          }}
+                        >
+                          {running ? <StopIcon /> : <PlayIcon />}
+                        </ActionIconButton>
+                      </div>
+                    </article>
+                  )
+                })}
+              </section>
+            ))}
           </ScrollArea>
           {menuState ? (
             <ContainerContextMenu
@@ -2012,6 +2022,30 @@ function filterContainers(items: ContainerSummary[], search: string) {
       )
 
   return [...filtered].sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }))
+}
+
+function groupContainersByProject(items: ContainerSummary[]) {
+  const groups = new Map<string, { key: string; label: string; items: ContainerSummary[] }>()
+
+  for (const item of items) {
+    const project = item.composeProject?.trim()
+    const key = project ? `compose:${project}` : 'standalone'
+    const label = project || 'Standalone'
+    const existing = groups.get(key)
+
+    if (existing) {
+      existing.items.push(item)
+      continue
+    }
+
+    groups.set(key, { key, label, items: [item] })
+  }
+
+  return [...groups.values()].sort((left, right) => {
+    if (left.key === 'standalone') return 1
+    if (right.key === 'standalone') return -1
+    return left.label.localeCompare(right.label, undefined, { sensitivity: 'base' })
+  })
 }
 
 function filterImages(items: ImageSummary[], search: string) {
