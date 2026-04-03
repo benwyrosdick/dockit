@@ -48,6 +48,7 @@ type AnsiStyle = {
 }
 
 type ContainerQuickAction = 'start' | 'stop' | 'restart' | 'delete'
+type ContainerGroupAction = 'start' | 'stop' | 'restart'
 type StatsHistoryPoint = {
   at: number
   cpu: number | null
@@ -414,6 +415,20 @@ function App() {
 
   const busy = actionMutation.isPending || pullMutation.isPending
   const currentStatus = statusQuery.data
+  const runContainerAction = (item: ContainerSummary, action: ContainerQuickAction) => {
+    switch (action) {
+      case 'start':
+        return startContainer(item.id)
+      case 'stop':
+        return stopContainer(item.id)
+      case 'restart':
+        return restartContainer(item.id)
+      case 'delete':
+        return removeContainer(item.id)
+      default:
+        return Promise.resolve()
+    }
+  }
 
   return (
     <div className="shell">
@@ -485,18 +500,13 @@ function App() {
             onSelect={setSelectedResourceId}
             onSelectTab={setDetailTab}
             onQuickAction={(item, action = item.state === 'running' ? 'stop' : 'start') =>
-              actionMutation.mutate(() => {
-                switch (action) {
-                  case 'start':
-                    return startContainer(item.id)
-                  case 'stop':
-                    return stopContainer(item.id)
-                  case 'restart':
-                    return restartContainer(item.id)
-                  case 'delete':
-                    return removeContainer(item.id)
-                  default:
-                    return Promise.resolve()
+              actionMutation.mutate(() => runContainerAction(item, action))}
+            onGroupAction={(items, action) =>
+              actionMutation.mutate(async () => {
+                for (const item of items) {
+                  if (action === 'start' && item.state === 'running') continue
+                  if (action === 'stop' && item.state !== 'running') continue
+                  await runContainerAction(item, action)
                 }
               })}
           />
@@ -597,6 +607,7 @@ function ContainersSection({
   onSelect,
   onSelectTab,
   onQuickAction,
+  onGroupAction,
 }: {
   items: ContainerSummary[]
   loading: boolean
@@ -609,15 +620,21 @@ function ContainersSection({
   onSelect: (id: string) => void
   onSelectTab: (tab: DetailTab) => void
   onQuickAction: (item: ContainerSummary, action?: ContainerQuickAction) => void
+  onGroupAction: (items: ContainerSummary[], action: ContainerGroupAction) => void
 }) {
   const [menuState, setMenuState] = useState<{ item: ContainerSummary; x: number; y: number } | null>(null)
+  const [groupMenuState, setGroupMenuState] = useState<{ key: string; label: string; items: ContainerSummary[]; x: number; y: number } | null>(null)
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
-    if (!menuState) return
+    if (!menuState && !groupMenuState) return
 
-    const closeMenu = () => setMenuState(null)
+    const closeMenu = () => {
+      setMenuState(null)
+      setGroupMenuState(null)
+    }
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMenuState(null)
+      if (event.key === 'Escape') closeMenu()
     }
 
     window.addEventListener('pointerdown', closeMenu)
@@ -627,10 +644,13 @@ function ContainersSection({
       window.removeEventListener('pointerdown', closeMenu)
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [menuState])
+  }, [menuState, groupMenuState])
 
   useEffect(() => {
-    if (busy) setMenuState(null)
+    if (busy) {
+      setMenuState(null)
+      setGroupMenuState(null)
+    }
   }, [busy])
 
   if (loading) return <StatePanel title="Loading containers" copy="Collecting runtime inventory." />
@@ -654,10 +674,24 @@ function ContainersSection({
             {groupedItems.map((group) => (
               <section key={group.key} className="container-group">
                 <header className="container-group-header">
-                  <span className="container-group-title">{group.label}</span>
+                  <button
+                    type="button"
+                    className="container-group-toggle"
+                    onClick={() => setCollapsedGroups((current) => ({ ...current, [group.key]: !current[group.key] }))}
+                    onContextMenu={(event) => {
+                      event.preventDefault()
+                      setMenuState(null)
+                      setGroupMenuState({ ...group, x: event.clientX, y: event.clientY })
+                    }}
+                  >
+                    <span className={collapsedGroups[group.key] ? 'group-chevron collapsed' : 'group-chevron'}>
+                      <ChevronIcon />
+                    </span>
+                    <span className="container-group-title">{group.label}</span>
+                  </button>
                   <span className="container-group-count">{group.items.length}</span>
                 </header>
-                {group.items.map((item) => {
+                {collapsedGroups[group.key] ? null : group.items.map((item) => {
                   const running = item.state === 'running'
                   const actionLabel = running ? 'Stop container' : 'Start container'
                   const statusTone = containerStatusTone(item)
@@ -713,6 +747,19 @@ function ContainersSection({
               onAction={(action) => {
                 setMenuState(null)
                 onQuickAction(menuState.item, action)
+              }}
+            />
+          ) : null}
+          {groupMenuState ? (
+            <ContainerGroupContextMenu
+              label={groupMenuState.label}
+              x={groupMenuState.x}
+              y={groupMenuState.y}
+              busy={busy}
+              onClose={() => setGroupMenuState(null)}
+              onAction={(action) => {
+                setGroupMenuState(null)
+                onGroupAction(groupMenuState.items, action)
               }}
             />
           ) : null}
@@ -778,6 +825,59 @@ function ContainerContextMenu({
             key={action.key}
             type="button"
             className={action.danger ? 'context-menu-item danger' : 'context-menu-item'}
+            disabled={busy}
+            onClick={() => onAction(action.key)}
+          >
+            <span className="context-menu-icon">{action.icon}</span>
+            <span>{action.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ContainerGroupContextMenu({
+  label,
+  x,
+  y,
+  busy,
+  onClose,
+  onAction,
+}: {
+  label: string
+  x: number
+  y: number
+  busy: boolean
+  onClose: () => void
+  onAction: (action: ContainerGroupAction) => void
+}) {
+  const actions: Array<{ key: ContainerGroupAction; label: string; icon: ReactNode }> = [
+    { key: 'start', label: 'Start all', icon: <PlayIcon /> },
+    { key: 'stop', label: 'Stop all', icon: <StopIcon /> },
+    { key: 'restart', label: 'Restart all', icon: <RestartIcon /> },
+  ]
+
+  return (
+    <div
+      className="context-menu-layer"
+      onContextMenu={(event) => {
+        event.preventDefault()
+        onClose()
+      }}
+    >
+      <div
+        className="context-menu"
+        style={{ left: Math.min(x, window.innerWidth - 232), top: Math.min(y, window.innerHeight - 180) }}
+        onPointerDown={(event) => event.stopPropagation()}
+        onContextMenu={(event) => event.preventDefault()}
+      >
+        <div className="context-menu-group-label">{label}</div>
+        {actions.map((action) => (
+          <button
+            key={action.key}
+            type="button"
+            className="context-menu-item"
             disabled={busy}
             onClick={() => onAction(action.key)}
           >
@@ -1976,6 +2076,10 @@ function RestartIcon() {
 
 function TrashIcon() {
   return <IconFrame path="M6 7h12M9 7V5h6v2m-7 3v7m4-7v7m4-7v7M8 7l1 12h6l1-12" />
+}
+
+function ChevronIcon() {
+  return <IconFrame path="m8 10 4 4 4-4" />
 }
 
 function FollowIcon() {
