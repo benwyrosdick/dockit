@@ -72,6 +72,9 @@ const resources: Array<{
 const CUSTOM_SCROLLBAR_SIZE = 10
 const CUSTOM_SCROLLBAR_INSET = 4
 const CUSTOM_SCROLLBAR_GAP = 12
+const RESOURCE_PANE_WIDTH_KEY = 'dockit.resourcePaneWidth'
+const RESOURCE_PANE_MIN = 280
+const RESOURCE_PANE_MAX = 520
 
 function ScrollArea({
   className,
@@ -1136,9 +1139,70 @@ function NetworksSection({
 }
 
 function ResourceWorkspace({ list, detail }: { list: ReactNode; detail: ReactNode }) {
+  const workspaceRef = useRef<HTMLElement | null>(null)
+  const [listWidth, setListWidth] = useState(() => {
+    if (typeof window === 'undefined') return 360
+    const saved = Number(window.localStorage.getItem(RESOURCE_PANE_WIDTH_KEY))
+    return Number.isFinite(saved) ? clamp(saved, RESOURCE_PANE_MIN, RESOURCE_PANE_MAX) : 360
+  })
+
+  useEffect(() => {
+    window.localStorage.setItem(RESOURCE_PANE_WIDTH_KEY, String(listWidth))
+  }, [listWidth])
+
+  useEffect(() => {
+    const handleResize = () => {
+      const workspace = workspaceRef.current
+      if (!workspace || window.innerWidth <= 1080) return
+      const maxWidth = Math.min(RESOURCE_PANE_MAX, workspace.clientWidth - 320)
+      setListWidth((current: number) => clamp(current, RESOURCE_PANE_MIN, maxWidth))
+    }
+
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    const workspace = workspaceRef.current
+    if (!workspace || window.innerWidth <= 1080) return
+
+    event.preventDefault()
+    const pointerId = event.pointerId
+    const workspaceRect = workspace.getBoundingClientRect()
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const maxWidth = Math.min(RESOURCE_PANE_MAX, workspace.clientWidth - 320)
+      const nextWidth = clamp(moveEvent.clientX - workspaceRect.left, RESOURCE_PANE_MIN, maxWidth)
+      setListWidth(nextWidth)
+    }
+
+    const handlePointerUp = () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+
+    event.currentTarget.setPointerCapture(pointerId)
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+  }
+
   return (
-    <section className="resource-workspace">
+    <section
+      ref={workspaceRef}
+      className="resource-workspace"
+      style={{ gridTemplateColumns: `${listWidth}px 10px minmax(0, 1fr)` }}
+    >
       {list}
+      <div
+        className="pane-resize-handle"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize list pane"
+        onPointerDown={startResize}
+      >
+        <span className="pane-resize-grip" />
+      </div>
       <section className="detail-pane">{detail}</section>
     </section>
   )
@@ -1994,6 +2058,10 @@ function formatUsagePair(usage?: number | null, limit?: number | null) {
 
 function formatRate(value?: number | null) {
   return value == null ? '--' : `${formatBytes(value)}/s`
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max)
 }
 
 function buildSparklinePaths(
