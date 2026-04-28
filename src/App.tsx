@@ -718,7 +718,7 @@ function ContainersSection({
                           <strong className={nameClassName}>{item.name}</strong>
                           {item.composeService ? <span className="pill info">{item.composeService}</span> : null}
                         </div>
-                        <small>{item.image}</small>
+                    <small title={item.image}>{middleEllipsis(item.image, 34)}</small>
                         <span className={statusClassName}>{item.status}</span>
                       </div>
                       <div className="resource-item-actions">
@@ -2251,6 +2251,14 @@ function filterNetworks(items: NetworkSummary[], search: string) {
 
 function imageSortLabel(item: ImageSummary) {
   return item.primaryTag || item.tags[0] || item.id
+}
+
+function middleEllipsis(value: string, maxLength: number) {
+  if (value.length <= maxLength) return value
+  const visible = maxLength - 3
+  const start = Math.ceil(visible / 2)
+  const end = Math.floor(visible / 2)
+  return `${value.slice(0, start)}...${value.slice(value.length - end)}`
 }
 
 function renderImageListTag(tag: string) {
