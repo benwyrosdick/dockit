@@ -61,12 +61,11 @@ const STATS_HISTORY_WINDOW_MS = 60_000
 const resources: Array<{
   key: ResourceKey
   label: string
-  caption: string
 }> = [
-  { key: 'containers', label: 'Containers', caption: 'Runtime health and logs' },
-  { key: 'images', label: 'Images', caption: 'Builds, pulls, and cleanup' },
-  { key: 'volumes', label: 'Volumes', caption: 'Persistent data' },
-  { key: 'networks', label: 'Networks', caption: 'Connectivity fabric' },
+  { key: 'containers', label: 'Containers' },
+  { key: 'images', label: 'Images' },
+  { key: 'volumes', label: 'Volumes' },
+  { key: 'networks', label: 'Networks' },
 ]
 
 const CUSTOM_SCROLLBAR_SIZE = 10
@@ -313,6 +312,28 @@ function ScrollArea({
   )
 }
 
+function BrandMark() {
+  return (
+    <svg className="brand-mark" viewBox="0 0 512 512" role="img" aria-label="Dockit" fill="none">
+      <defs>
+        <linearGradient id="brand-badge" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#6fe3c0" />
+          <stop offset="1" stopColor="#2c9a78" />
+        </linearGradient>
+        <linearGradient id="brand-shine" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.28" />
+          <stop offset="0.55" stopColor="#ffffff" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <rect x="40" y="40" width="432" height="432" rx="116" fill="url(#brand-badge)" />
+      <rect x="40" y="40" width="432" height="232" rx="116" fill="url(#brand-shine)" />
+      <path d="M256 150 356 208 256 266 156 208Z" fill="#ffffff" />
+      <path d="M156 208 256 266 256 366 156 308Z" fill="#ffffff" fillOpacity="0.72" />
+      <path d="M356 208 256 266 256 366 356 308Z" fill="#ffffff" fillOpacity="0.5" />
+    </svg>
+  )
+}
+
 function App() {
   const [resource, setResource] = useState<ResourceKey>('containers')
   const [search, setSearch] = useState('')
@@ -438,9 +459,8 @@ function App() {
       <aside className="sidebar">
         <ScrollArea className="sidebar-scroll-area" viewportClassName="sidebar-scroll-viewport">
           <div className="brand-block">
-            <p className="eyebrow">Local Docker</p>
+            <BrandMark />
             <h1>Dockit</h1>
-            <p className="brand-copy">Compact runtime control</p>
           </div>
 
           <nav className="nav">
@@ -471,9 +491,8 @@ function App() {
       <main className="main-panel">
         <header className="topbar">
           <div className="topbar-copy">
-            <p className="eyebrow">{resources.find((item) => item.key === resource)?.label}</p>
             <h2>{resources.find((item) => item.key === resource)?.label}</h2>
-            <p className="topbar-meta">{currentItems.length} visible</p>
+            <p className="topbar-meta">{currentItems.length} shown</p>
           </div>
 
           <div className="toolbar">
@@ -668,7 +687,6 @@ function ContainersSection({
         <section className="resource-list-pane">
           <div className="list-pane-header">
             <div>
-              <p className="eyebrow">Runtime inventory</p>
               <h3>Containers</h3>
             </div>
             <span className="list-count">{items.length}</span>
@@ -926,8 +944,7 @@ function ImagesSection({
     <>
       <section className="hero-strip">
         <div>
-          <p className="eyebrow">Registry Pull</p>
-          <h3>Fetch a new image into the local engine</h3>
+          <h3>Pull an image</h3>
         </div>
         <div className="pull-form">
           <input value={pullTarget} onChange={(event) => onPullTargetChange(event.target.value)} />
@@ -947,7 +964,6 @@ function ImagesSection({
             <section className="resource-list-pane">
               <div className="list-pane-header">
                 <div>
-                  <p className="eyebrow">Image cache</p>
                   <h3>Images</h3>
                 </div>
                 <span className="list-count">{items.length}</span>
@@ -1022,7 +1038,6 @@ function VolumesSection({
         <section className="resource-list-pane">
           <div className="list-pane-header">
             <div>
-              <p className="eyebrow">Persistent storage</p>
               <h3>Volumes</h3>
             </div>
             <span className="list-count">{items.length}</span>
@@ -1095,7 +1110,6 @@ function NetworksSection({
         <section className="resource-list-pane">
           <div className="list-pane-header">
             <div>
-              <p className="eyebrow">Connectivity fabric</p>
               <h3>Networks</h3>
             </div>
             <span className="list-count">{items.length}</span>
@@ -1470,7 +1484,6 @@ function DetailHeader({ title, subtitle }: { title: string; subtitle: string }) 
   return (
     <header className="detail-header">
       <div>
-        <p className="eyebrow">Selected resource</p>
         <h3>{title}</h3>
       </div>
       <span className="detail-subtitle">{subtitle}</span>
