@@ -28,7 +28,6 @@ import type {
   ContainerStats,
   ContainerSummary,
   ContainerTop,
-  DockerStatus,
   ImageSummary,
   InspectPayload,
   NetworkSummary,
@@ -68,12 +67,26 @@ const resources: Array<{
   { key: 'networks', label: 'Networks' },
 ]
 
-const CUSTOM_SCROLLBAR_SIZE = 10
-const CUSTOM_SCROLLBAR_INSET = 4
-const CUSTOM_SCROLLBAR_GAP = 12
+const CUSTOM_SCROLLBAR_SIZE = 8
+const CUSTOM_SCROLLBAR_INSET = 3
+const CUSTOM_SCROLLBAR_GAP = 8
 const RESOURCE_PANE_WIDTH_KEY = 'dockit.resourcePaneWidth'
-const RESOURCE_PANE_MIN = 280
-const RESOURCE_PANE_MAX = 520
+const RESOURCE_PANE_MIN = 240
+const RESOURCE_PANE_MAX = 480
+const RESOURCE_PANE_DEFAULT = 300
+
+const RESOURCE_ICON_COLORS = [
+  '#5b9cf5',
+  '#34c759',
+  '#bf5af2',
+  '#ff9f0a',
+  '#ff453a',
+  '#64d2ff',
+  '#ff6b8a',
+  '#30d158',
+  '#ac8e68',
+  '#0a84ff',
+]
 
 function ScrollArea({
   className,
@@ -312,26 +325,28 @@ function ScrollArea({
   )
 }
 
-function BrandMark() {
-  return (
-    <svg className="brand-mark" viewBox="0 0 512 512" role="img" aria-label="Dockit" fill="none">
-      <defs>
-        <linearGradient id="brand-badge" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#6fe3c0" />
-          <stop offset="1" stopColor="#2c9a78" />
-        </linearGradient>
-        <linearGradient id="brand-shine" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#ffffff" stopOpacity="0.28" />
-          <stop offset="0.55" stopColor="#ffffff" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <rect x="40" y="40" width="432" height="432" rx="116" fill="url(#brand-badge)" />
-      <rect x="40" y="40" width="432" height="232" rx="116" fill="url(#brand-shine)" />
-      <path d="M256 150 356 208 256 266 156 208Z" fill="#ffffff" />
-      <path d="M156 208 256 266 256 366 156 308Z" fill="#ffffff" fillOpacity="0.72" />
-      <path d="M356 208 256 266 256 366 356 308Z" fill="#ffffff" fillOpacity="0.5" />
-    </svg>
-  )
+function resourceIconColor(seed: string) {
+  let hash = 0
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0
+  }
+  return RESOURCE_ICON_COLORS[hash % RESOURCE_ICON_COLORS.length]
+}
+
+function resourceInitials(label: string) {
+  const cleaned = label.replace(/^\/+/, '').trim()
+  if (!cleaned) return '?'
+  const parts = cleaned.split(/[-_\s./]+/).filter(Boolean)
+  if (parts.length >= 2) return `${parts[0][0] ?? ''}${parts[1][0] ?? ''}`.toUpperCase()
+  return cleaned.slice(0, 2).toUpperCase()
+}
+
+function containerStateClass(state: string) {
+  const normalized = state.toLowerCase()
+  if (normalized === 'running') return 'running'
+  if (normalized === 'exited' || normalized === 'dead' || normalized === 'removing') return 'exited'
+  if (normalized === 'paused' || normalized === 'created' || normalized === 'restarting') return normalized === 'restarting' ? 'paused' : normalized
+  return 'stopped'
 }
 
 function App() {
@@ -454,61 +469,52 @@ function App() {
     }
   }
 
+  const runningCount = filteredData.containers.filter((item) => item.state === 'running').length
+
   return (
     <div className="shell">
-      <aside className="sidebar">
-        <ScrollArea className="sidebar-scroll-area" viewportClassName="sidebar-scroll-viewport">
-          <div className="brand-block">
-            <BrandMark />
-            <h1>Dockit</h1>
+      <aside className="icon-rail" aria-label="Navigation">
+        <div className="rail-brand" title="Dockit">
+          Dk
+        </div>
+        <nav className="rail-nav">
+          {resources.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              className={resource === item.key ? 'rail-item active' : 'rail-item'}
+              title={item.label}
+              aria-label={item.label}
+              aria-current={resource === item.key ? 'page' : undefined}
+              onClick={() => {
+                setResource(item.key)
+                setSearch('')
+                setSelectedResourceId('')
+                setDetailTab('info')
+              }}
+            >
+              <ResourceNavIcon resource={item.key} />
+              {counts[item.key] > 0 ? <span className="rail-item-count">{counts[item.key]}</span> : null}
+            </button>
+          ))}
+        </nav>
+        <div className="rail-footer">
+          <div
+            className="rail-status"
+            title={
+              statusQuery.isLoading
+                ? 'Checking Docker…'
+                : currentStatus?.connected
+                  ? `Engine online${currentStatus.serverVersion ? ` · ${currentStatus.serverVersion}` : ''}`
+                  : currentStatus?.error || 'Engine unavailable'
+            }
+          >
+            <span className={currentStatus?.connected ? 'status-dot online' : 'status-dot offline'} />
           </div>
-
-          <nav className="nav">
-            {resources.map((item) => (
-              <button
-                  key={item.key}
-                  type="button"
-                  className={resource === item.key ? 'nav-item active' : 'nav-item'}
-                  onClick={() => {
-                    setResource(item.key)
-                    setSearch('')
-                    setSelectedResourceId('')
-                    setDetailTab('info')
-                  }}
-              >
-                <span>
-                  <strong>{item.label}</strong>
-                </span>
-                <span className="nav-count">{counts[item.key]}</span>
-              </button>
-            ))}
-          </nav>
-
-          <StatusPanel status={currentStatus} loading={statusQuery.isLoading} />
-        </ScrollArea>
+        </div>
       </aside>
 
-      <main className="main-panel">
-        <header className="topbar">
-          <div className="topbar-copy">
-            <h2>{resources.find((item) => item.key === resource)?.label}</h2>
-            <p className="topbar-meta">{currentItems.length} shown</p>
-          </div>
-
-          <div className="toolbar">
-            <label className="search">
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={`Filter ${resource}`}
-              />
-            </label>
-            <button type="button" className="ghost" onClick={() => void refreshAll()}>
-              Refresh
-            </button>
-          </div>
-        </header>
-
+      <main className="main-panel app-content">
         {resource === 'containers' && (
           <ContainersSection
             items={filteredData.containers}
@@ -519,6 +525,10 @@ function App() {
             inspectData={detailQuery.data}
             inspectLoading={detailQuery.isLoading}
             inspectError={detailQuery.error}
+            search={search}
+            onSearchChange={setSearch}
+            onRefresh={() => void refreshAll()}
+            runningCount={runningCount}
             onSelect={setSelectedResourceId}
             onSelectTab={setDetailTab}
             onQuickAction={(item, action = item.state === 'running' ? 'stop' : 'start') =>
@@ -544,6 +554,9 @@ function App() {
             inspectData={detailQuery.data}
             inspectLoading={detailQuery.isLoading}
             inspectError={detailQuery.error}
+            search={search}
+            onSearchChange={setSearch}
+            onRefresh={() => void refreshAll()}
             onSelect={setSelectedResourceId}
             onSelectTab={setDetailTab}
             pullTarget={pullTarget}
@@ -561,6 +574,9 @@ function App() {
             inspectData={detailQuery.data}
             inspectLoading={detailQuery.isLoading}
             inspectError={detailQuery.error}
+            search={search}
+            onSearchChange={setSearch}
+            onRefresh={() => void refreshAll()}
             onSelect={setSelectedResourceId}
             onSelectTab={setDetailTab}
           />
@@ -575,6 +591,9 @@ function App() {
             inspectData={detailQuery.data}
             inspectLoading={detailQuery.isLoading}
             inspectError={detailQuery.error}
+            search={search}
+            onSearchChange={setSearch}
+            onRefresh={() => void refreshAll()}
             onSelect={setSelectedResourceId}
             onSelectTab={setDetailTab}
           />
@@ -586,34 +605,84 @@ function App() {
           </div>
         )}
       </main>
-
     </div>
   )
 }
 
-function StatusPanel({ status, loading }: { status?: DockerStatus; loading: boolean }) {
+function ResourceNavIcon({ resource }: { resource: ResourceKey }) {
+  switch (resource) {
+    case 'containers':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="7" height="7" rx="1.2" />
+          <rect x="14" y="3" width="7" height="7" rx="1.2" />
+          <rect x="3" y="14" width="7" height="7" rx="1.2" />
+          <rect x="14" y="14" width="7" height="7" rx="1.2" />
+        </svg>
+      )
+    case 'images':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <circle cx="9" cy="11" r="1.6" />
+          <path d="m21 16-4.5-4.5L9 19" />
+        </svg>
+      )
+    case 'volumes':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <ellipse cx="12" cy="6" rx="7" ry="3" />
+          <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
+          <path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
+        </svg>
+      )
+    case 'networks':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="5" r="2.2" />
+          <circle cx="5" cy="19" r="2.2" />
+          <circle cx="19" cy="19" r="2.2" />
+          <path d="M12 7.2v4.3M12 11.5 6.2 17.2M12 11.5l5.8 5.7" />
+        </svg>
+      )
+  }
+}
+
+function ListPaneHeader({
+  title,
+  subtitle,
+  search,
+  searchPlaceholder,
+  onSearchChange,
+  onRefresh,
+}: {
+  title: string
+  subtitle: string
+  search: string
+  searchPlaceholder: string
+  onSearchChange: (value: string) => void
+  onRefresh: () => void
+}) {
   return (
-    <section className="status-card">
-      <div className="status-row">
-        <span className={status?.connected ? 'status-dot online' : 'status-dot offline'} />
-        <strong>{loading ? 'Checking daemon' : status?.connected ? 'Engine online' : 'Engine unavailable'}</strong>
+    <div className="list-pane-header">
+      <div className="list-pane-title-block">
+        <h3>{title}</h3>
+        <span className="list-count">{subtitle}</span>
       </div>
-      <dl>
-        <div>
-          <dt>Docker</dt>
-          <dd>{status?.serverVersion ?? 'Not connected'}</dd>
-        </div>
-        <div>
-          <dt>API</dt>
-          <dd>{status?.apiVersion ?? '--'}</dd>
-        </div>
-        <div>
-          <dt>OS</dt>
-          <dd>{status?.osType ?? 'linux'}</dd>
-        </div>
-      </dl>
-      {status?.error && <p className="status-error">{status.error}</p>}
-    </section>
+      <div className="list-pane-actions">
+        <label className="list-search">
+          <SearchIcon />
+          <input
+            value={search}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder={searchPlaceholder}
+          />
+        </label>
+        <ActionIconButton label="Refresh" tone="ghost" onClick={onRefresh}>
+          <RefreshIcon />
+        </ActionIconButton>
+      </div>
+    </div>
   )
 }
 
@@ -626,6 +695,10 @@ function ContainersSection({
   inspectData,
   inspectLoading,
   inspectError,
+  search,
+  onSearchChange,
+  onRefresh,
+  runningCount,
   onSelect,
   onSelectTab,
   onQuickAction,
@@ -639,6 +712,10 @@ function ContainersSection({
   inspectData?: InspectPayload
   inspectLoading: boolean
   inspectError: unknown
+  search: string
+  onSearchChange: (value: string) => void
+  onRefresh: () => void
+  runningCount: number
   onSelect: (id: string) => void
   onSelectTab: (tab: DetailTab) => void
   onQuickAction: (item: ContainerSummary, action?: ContainerQuickAction) => void
@@ -675,89 +752,120 @@ function ContainersSection({
     }
   }, [busy])
 
-  if (loading) return <StatePanel title="Loading containers" copy="Collecting runtime inventory." />
-  if (!items.length) return <StatePanel title="No containers" copy="Start a workload and it will show up here." />
-
   const selected = items.find((item) => item.id === selectedId) ?? items[0]
   const groupedItems = groupContainersByProject(items)
+  const subtitle = loading
+    ? 'Loading…'
+    : `${runningCount} running · ${items.length} shown`
 
   return (
     <ResourceWorkspace
       list={
         <section className="resource-list-pane">
-          <div className="list-pane-header">
-            <div>
-              <h3>Containers</h3>
-            </div>
-            <span className="list-count">{items.length}</span>
-          </div>
-          <ScrollArea className="resource-list-scroll-area" viewportClassName="resource-list">
-            {groupedItems.map((group) => (
-              <section key={group.key} className="container-group">
-                <header className="container-group-header">
-                  <button
-                    type="button"
-                    className="container-group-toggle"
-                    onClick={() => setCollapsedGroups((current) => ({ ...current, [group.key]: !current[group.key] }))}
-                    onContextMenu={(event) => {
-                      event.preventDefault()
-                      setMenuState(null)
-                      setGroupMenuState({ ...group, x: event.clientX, y: event.clientY })
-                    }}
-                  >
-                    <span className={collapsedGroups[group.key] ? 'group-chevron collapsed' : 'group-chevron'}>
-                      <ChevronIcon />
-                    </span>
-                    <span className="container-group-title">{group.label}</span>
-                  </button>
-                  <span className="container-group-count">{group.items.length}</span>
-                </header>
-                {collapsedGroups[group.key] ? null : group.items.map((item) => {
-                  const running = item.state === 'running'
-                  const actionLabel = running ? 'Stop container' : 'Start container'
-                  const statusTone = containerStatusTone(item)
-                  const nameClassName = ['container-name', statusTone].filter(Boolean).join(' ')
-                  const statusClassName = ['resource-meta-line', 'uptime-line', statusTone].filter(Boolean).join(' ')
-                  return (
-                    <article
-                      key={item.id}
-                      className={item.id === selected.id ? 'resource-list-item selected' : 'resource-list-item'}
-                      onClick={() => {
-                        onSelect(item.id)
-                      }}
+          <ListPaneHeader
+            title="Containers"
+            subtitle={subtitle}
+            search={search}
+            searchPlaceholder="Filter"
+            onSearchChange={onSearchChange}
+            onRefresh={onRefresh}
+          />
+          {loading ? (
+            <StatePanel title="Loading containers" copy="Collecting runtime inventory." />
+          ) : !items.length ? (
+            <StatePanel title="No containers" copy="Start a workload and it will show up here." />
+          ) : (
+            <ScrollArea className="resource-list-scroll-area" viewportClassName="resource-list">
+              {groupedItems.map((group) => (
+                <section key={group.key} className="container-group">
+                  <header className="container-group-header">
+                    <button
+                      type="button"
+                      className="container-group-toggle"
+                      onClick={() => setCollapsedGroups((current) => ({ ...current, [group.key]: !current[group.key] }))}
                       onContextMenu={(event) => {
                         event.preventDefault()
-                        onSelect(item.id)
-                        setMenuState({ item, x: event.clientX, y: event.clientY })
+                        setMenuState(null)
+                        setGroupMenuState({ ...group, x: event.clientX, y: event.clientY })
                       }}
                     >
-                      <div className="resource-item-copy">
-                        <div className="resource-item-head">
-                          <strong className={nameClassName}>{item.name}</strong>
-                          {item.composeService ? <span className="pill info">{item.composeService}</span> : null}
-                        </div>
-                    <small title={item.image}>{middleEllipsis(item.image, 34)}</small>
-                        <span className={statusClassName}>{item.status}</span>
-                      </div>
-                      <div className="resource-item-actions">
-                        <ActionIconButton
-                          label={actionLabel}
-                          tone="ghost"
-                          disabled={busy}
-                          onClick={() => {
-                            onSelect(item.id)
-                            onQuickAction(item)
-                          }}
-                        >
-                          {running ? <StopIcon /> : <PlayIcon />}
-                        </ActionIconButton>
-                      </div>
-                    </article>
-                  )
-                })}
-              </section>
-            ))}
-          </ScrollArea>
+                      <span className={collapsedGroups[group.key] ? 'group-chevron collapsed' : 'group-chevron'}>
+                        <ChevronIcon />
+                      </span>
+                      <span className="group-project-icon" aria-hidden="true">
+                        <ProjectIcon />
+                      </span>
+                      <span className="container-group-title">{group.label}</span>
+                    </button>
+                    <span className="container-group-count">{group.items.length}</span>
+                  </header>
+                  {collapsedGroups[group.key]
+                    ? null
+                    : group.items.map((item) => {
+                        const running = item.state === 'running'
+                        const actionLabel = running ? 'Stop container' : 'Start container'
+                        const statusTone = containerStatusTone(item)
+                        const nameClassName = ['container-name', statusTone].filter(Boolean).join(' ')
+                        return (
+                          <article
+                            key={item.id}
+                            className={item.id === selected?.id ? 'resource-list-item selected' : 'resource-list-item'}
+                            onClick={() => {
+                              onSelect(item.id)
+                            }}
+                            onContextMenu={(event) => {
+                              event.preventDefault()
+                              onSelect(item.id)
+                              setMenuState({ item, x: event.clientX, y: event.clientY })
+                            }}
+                          >
+                            <div className="resource-item-main">
+                              <div
+                                className="resource-item-icon"
+                                style={{ background: resourceIconColor(item.image || item.name) }}
+                                aria-hidden="true"
+                              >
+                                {resourceInitials(item.name)}
+                                <span className={`resource-status-dot ${containerStateClass(item.state)}`} />
+                              </div>
+                              <div className="resource-item-copy">
+                                <div className="resource-item-head">
+                                  <strong className={nameClassName}>{item.name}</strong>
+                                </div>
+                                <small title={item.image}>{middleEllipsis(item.image, 36)}</small>
+                              </div>
+                            </div>
+                            <div className="resource-item-actions">
+                              <ActionIconButton
+                                label={actionLabel}
+                                tone="ghost"
+                                disabled={busy}
+                                onClick={() => {
+                                  onSelect(item.id)
+                                  onQuickAction(item)
+                                }}
+                              >
+                                {running ? <StopIcon /> : <PlayIcon />}
+                              </ActionIconButton>
+                              <ActionIconButton
+                                label="Delete container"
+                                tone="ghost"
+                                disabled={busy}
+                                onClick={() => {
+                                  onSelect(item.id)
+                                  onQuickAction(item, 'delete')
+                                }}
+                              >
+                                <TrashIcon />
+                              </ActionIconButton>
+                            </div>
+                          </article>
+                        )
+                      })}
+                </section>
+              ))}
+            </ScrollArea>
+          )}
           {menuState ? (
             <ContainerContextMenu
               item={menuState.item}
@@ -787,14 +895,18 @@ function ContainersSection({
         </section>
       }
       detail={
-        <ContainerDetailPane
-          item={selected}
-          selectedTab={selectedTab}
-          inspectData={inspectData}
-          inspectLoading={inspectLoading}
-          inspectError={inspectError}
-          onSelectTab={onSelectTab}
-        />
+        selected ? (
+          <ContainerDetailPane
+            item={selected}
+            selectedTab={selectedTab}
+            inspectData={inspectData}
+            inspectLoading={inspectLoading}
+            inspectError={inspectError}
+            onSelectTab={onSelectTab}
+          />
+        ) : (
+          <StatePanel title="No selection" copy="Select a container to inspect it." />
+        )
       }
     />
   )
@@ -920,6 +1032,9 @@ function ImagesSection({
   inspectData,
   inspectLoading,
   inspectError,
+  search,
+  onSearchChange,
+  onRefresh,
   onSelect,
   onSelectTab,
   pullTarget,
@@ -934,77 +1049,99 @@ function ImagesSection({
   inspectData?: InspectPayload
   inspectLoading: boolean
   inspectError: unknown
+  search: string
+  onSearchChange: (value: string) => void
+  onRefresh: () => void
   onSelect: (id: string) => void
   onSelectTab: (tab: DetailTab) => void
   pullTarget: string
   onPullTargetChange: (value: string) => void
   onPull: () => void
 }) {
+  const selected = items.find((item) => item.id === selectedId) ?? items[0]
+
   return (
-    <>
+    <div className="resource-view">
       <section className="hero-strip">
         <div>
           <h3>Pull an image</h3>
         </div>
         <div className="pull-form">
-          <input value={pullTarget} onChange={(event) => onPullTargetChange(event.target.value)} />
-          <button type="button" disabled={busy || !pullTarget.trim()} onClick={onPull}>
-            Pull image
+          <input value={pullTarget} onChange={(event) => onPullTargetChange(event.target.value)} placeholder="redis:7" />
+          <button type="button" className="primary" disabled={busy || !pullTarget.trim()} onClick={onPull}>
+            Pull
           </button>
         </div>
       </section>
 
-      {loading ? (
-        <StatePanel title="Loading images" copy="Reading the local cache and tags." />
-      ) : !items.length ? (
-        <StatePanel title="No images" copy="Pull or build something and it will appear here." />
-      ) : (
-        <ResourceWorkspace
-          list={
-            <section className="resource-list-pane">
-              <div className="list-pane-header">
-                <div>
-                  <h3>Images</h3>
-                </div>
-                <span className="list-count">{items.length}</span>
-              </div>
+      <ResourceWorkspace
+        list={
+          <section className="resource-list-pane">
+            <ListPaneHeader
+              title="Images"
+              subtitle={loading ? 'Loading…' : `${items.length} shown`}
+              search={search}
+              searchPlaceholder="Filter"
+              onSearchChange={onSearchChange}
+              onRefresh={onRefresh}
+            />
+            {loading ? (
+              <StatePanel title="Loading images" copy="Reading the local cache and tags." />
+            ) : !items.length ? (
+              <StatePanel title="No images" copy="Pull or build something and it will appear here." />
+            ) : (
               <ScrollArea className="resource-list-scroll-area" viewportClassName="resource-list">
-                {items.map((item) => (
-                  <article
-                    key={item.id}
-                    className={item.id === (selectedId || items[0]?.id) ? 'resource-list-item selected' : 'resource-list-item'}
-                    onClick={() => {
-                      onSelect(item.id)
-                      onSelectTab('info')
-                    }}
-                  >
-                    <div className="resource-item-copy">
-                      <div className="resource-item-head">
-                        <strong>{renderImageListTag(item.primaryTag || '<untagged>')}</strong>
-                        <span className="pill info">{item.containers} refs</span>
+                {items.map((item) => {
+                  const label = item.primaryTag || '<untagged>'
+                  return (
+                    <article
+                      key={item.id}
+                      className={item.id === (selectedId || items[0]?.id) ? 'resource-list-item selected' : 'resource-list-item'}
+                      onClick={() => {
+                        onSelect(item.id)
+                        onSelectTab('info')
+                      }}
+                    >
+                      <div className="resource-item-main">
+                        <div
+                          className="resource-item-icon"
+                          style={{ background: resourceIconColor(label) }}
+                          aria-hidden="true"
+                        >
+                          {resourceInitials(label)}
+                        </div>
+                        <div className="resource-item-copy">
+                          <div className="resource-item-head">
+                            <strong>{renderImageListTag(label)}</strong>
+                          </div>
+                          <small>
+                            {formatBytes(item.size)} · {shortenId(item.id)}
+                          </small>
+                        </div>
                       </div>
-                      <small>{shortenId(item.id)}</small>
-                      <span className="resource-meta-line">{item.tags[1] ?? item.tags[0] ?? 'No tags'}</span>
-                      <span className="resource-meta-line">{formatBytes(item.size)} • {formatDateTime(item.created)}</span>
-                    </div>
-                  </article>
-                ))}
+                    </article>
+                  )
+                })}
               </ScrollArea>
-            </section>
-          }
-          detail={
+            )}
+          </section>
+        }
+        detail={
+          selected ? (
             <ImageDetailPane
-              item={items.find((item) => item.id === selectedId) ?? items[0]}
+              item={selected}
               selectedTab={selectedTab}
               inspectData={inspectData}
               inspectLoading={inspectLoading}
               inspectError={inspectError}
               onSelectTab={onSelectTab}
             />
-          }
-        />
-      )}
-    </>
+          ) : (
+            <StatePanel title="No selection" copy="Select an image to inspect it." />
+          )
+        }
+      />
+    </div>
   )
 }
 
@@ -1016,6 +1153,9 @@ function VolumesSection({
   inspectData,
   inspectLoading,
   inspectError,
+  search,
+  onSearchChange,
+  onRefresh,
   onSelect,
   onSelectTab,
 }: {
@@ -1026,55 +1166,77 @@ function VolumesSection({
   inspectData?: InspectPayload
   inspectLoading: boolean
   inspectError: unknown
+  search: string
+  onSearchChange: (value: string) => void
+  onRefresh: () => void
   onSelect: (id: string) => void
   onSelectTab: (tab: DetailTab) => void
 }) {
-  if (loading) return <StatePanel title="Loading volumes" copy="Checking persistent storage." />
-  if (!items.length) return <StatePanel title="No volumes" copy="Create a named volume and it will show here." />
+  const selected = items.find((item) => item.name === selectedId) ?? items[0]
 
   return (
     <ResourceWorkspace
       list={
         <section className="resource-list-pane">
-          <div className="list-pane-header">
-            <div>
-              <h3>Volumes</h3>
-            </div>
-            <span className="list-count">{items.length}</span>
-          </div>
-          <ScrollArea className="resource-list-scroll-area" viewportClassName="resource-list">
-            {items.map((item) => (
-              <article
-                key={item.name}
-                className={item.name === (selectedId || items[0]?.name) ? 'resource-list-item selected' : 'resource-list-item'}
-                onClick={() => {
-                  onSelect(item.name)
-                  onSelectTab('info')
-                }}
-              >
-                <div className="resource-item-copy">
-                  <div className="resource-item-head">
-                    <strong>{item.name}</strong>
-                    <span className="pill info">{item.scope}</span>
+          <ListPaneHeader
+            title="Volumes"
+            subtitle={loading ? 'Loading…' : `${items.length} shown`}
+            search={search}
+            searchPlaceholder="Filter"
+            onSearchChange={onSearchChange}
+            onRefresh={onRefresh}
+          />
+          {loading ? (
+            <StatePanel title="Loading volumes" copy="Checking persistent storage." />
+          ) : !items.length ? (
+            <StatePanel title="No volumes" copy="Create a named volume and it will show here." />
+          ) : (
+            <ScrollArea className="resource-list-scroll-area" viewportClassName="resource-list">
+              {items.map((item) => (
+                <article
+                  key={item.name}
+                  className={item.name === (selectedId || items[0]?.name) ? 'resource-list-item selected' : 'resource-list-item'}
+                  onClick={() => {
+                    onSelect(item.name)
+                    onSelectTab('info')
+                  }}
+                >
+                  <div className="resource-item-main">
+                    <div
+                      className="resource-item-icon"
+                      style={{ background: resourceIconColor(item.name) }}
+                      aria-hidden="true"
+                    >
+                      {resourceInitials(item.name)}
+                    </div>
+                    <div className="resource-item-copy">
+                      <div className="resource-item-head">
+                        <strong>{item.name}</strong>
+                      </div>
+                      <small>
+                        {item.driver} · {item.scope}
+                      </small>
+                    </div>
                   </div>
-                  <small>{item.driver}</small>
-                  <span className="resource-meta-line">{item.mountpoint || 'Unknown mountpoint'}</span>
-                  <span className="resource-meta-line">{item.createdAt || 'Unknown creation time'}</span>
-                </div>
-              </article>
-            ))}
-          </ScrollArea>
+                </article>
+              ))}
+            </ScrollArea>
+          )}
         </section>
       }
       detail={
-        <VolumeDetailPane
-          item={items.find((item) => item.name === selectedId) ?? items[0]}
-          selectedTab={selectedTab}
-          inspectData={inspectData}
-          inspectLoading={inspectLoading}
-          inspectError={inspectError}
-          onSelectTab={onSelectTab}
-        />
+        selected ? (
+          <VolumeDetailPane
+            item={selected}
+            selectedTab={selectedTab}
+            inspectData={inspectData}
+            inspectLoading={inspectLoading}
+            inspectError={inspectError}
+            onSelectTab={onSelectTab}
+          />
+        ) : (
+          <StatePanel title="No selection" copy="Select a volume to inspect it." />
+        )
       }
     />
   )
@@ -1088,6 +1250,9 @@ function NetworksSection({
   inspectData,
   inspectLoading,
   inspectError,
+  search,
+  onSearchChange,
+  onRefresh,
   onSelect,
   onSelectTab,
 }: {
@@ -1098,55 +1263,77 @@ function NetworksSection({
   inspectData?: InspectPayload
   inspectLoading: boolean
   inspectError: unknown
+  search: string
+  onSearchChange: (value: string) => void
+  onRefresh: () => void
   onSelect: (id: string) => void
   onSelectTab: (tab: DetailTab) => void
 }) {
-  if (loading) return <StatePanel title="Loading networks" copy="Mapping local network bridges." />
-  if (!items.length) return <StatePanel title="No networks" copy="Docker will list networks here once available." />
+  const selected = items.find((item) => item.id === selectedId) ?? items[0]
 
   return (
     <ResourceWorkspace
       list={
         <section className="resource-list-pane">
-          <div className="list-pane-header">
-            <div>
-              <h3>Networks</h3>
-            </div>
-            <span className="list-count">{items.length}</span>
-          </div>
-          <ScrollArea className="resource-list-scroll-area" viewportClassName="resource-list">
-            {items.map((item) => (
-              <article
-                key={item.id}
-                className={item.id === (selectedId || items[0]?.id) ? 'resource-list-item selected' : 'resource-list-item'}
-                onClick={() => {
-                  onSelect(item.id)
-                  onSelectTab('info')
-                }}
-              >
-                <div className="resource-item-copy">
-                  <div className="resource-item-head">
-                    <strong>{item.name}</strong>
-                    <span className="pill info">{item.driver}</span>
+          <ListPaneHeader
+            title="Networks"
+            subtitle={loading ? 'Loading…' : `${items.length} shown`}
+            search={search}
+            searchPlaceholder="Filter"
+            onSearchChange={onSearchChange}
+            onRefresh={onRefresh}
+          />
+          {loading ? (
+            <StatePanel title="Loading networks" copy="Mapping local network bridges." />
+          ) : !items.length ? (
+            <StatePanel title="No networks" copy="Docker will list networks here once available." />
+          ) : (
+            <ScrollArea className="resource-list-scroll-area" viewportClassName="resource-list">
+              {items.map((item) => (
+                <article
+                  key={item.id}
+                  className={item.id === (selectedId || items[0]?.id) ? 'resource-list-item selected' : 'resource-list-item'}
+                  onClick={() => {
+                    onSelect(item.id)
+                    onSelectTab('info')
+                  }}
+                >
+                  <div className="resource-item-main">
+                    <div
+                      className="resource-item-icon"
+                      style={{ background: resourceIconColor(item.name) }}
+                      aria-hidden="true"
+                    >
+                      {resourceInitials(item.name)}
+                    </div>
+                    <div className="resource-item-copy">
+                      <div className="resource-item-head">
+                        <strong>{item.name}</strong>
+                      </div>
+                      <small>
+                        {item.driver} · {item.scope}
+                      </small>
+                    </div>
                   </div>
-                  <small>{shortenId(item.id)}</small>
-                  <span className="resource-meta-line">{item.scope} • {networkFlags(item)}</span>
-                  <span className="resource-meta-line">{item.created || 'Unknown creation time'}</span>
-                </div>
-              </article>
-            ))}
-          </ScrollArea>
+                </article>
+              ))}
+            </ScrollArea>
+          )}
         </section>
       }
       detail={
-        <NetworkDetailPane
-          item={items.find((item) => item.id === selectedId) ?? items[0]}
-          selectedTab={selectedTab}
-          inspectData={inspectData}
-          inspectLoading={inspectLoading}
-          inspectError={inspectError}
-          onSelectTab={onSelectTab}
-        />
+        selected ? (
+          <NetworkDetailPane
+            item={selected}
+            selectedTab={selectedTab}
+            inspectData={inspectData}
+            inspectLoading={inspectLoading}
+            inspectError={inspectError}
+            onSelectTab={onSelectTab}
+          />
+        ) : (
+          <StatePanel title="No selection" copy="Select a network to inspect it." />
+        )
       }
     />
   )
@@ -1155,9 +1342,9 @@ function NetworksSection({
 function ResourceWorkspace({ list, detail }: { list: ReactNode; detail: ReactNode }) {
   const workspaceRef = useRef<HTMLElement | null>(null)
   const [listWidth, setListWidth] = useState(() => {
-    if (typeof window === 'undefined') return 360
+    if (typeof window === 'undefined') return RESOURCE_PANE_DEFAULT
     const saved = Number(window.localStorage.getItem(RESOURCE_PANE_WIDTH_KEY))
-    return Number.isFinite(saved) ? clamp(saved, RESOURCE_PANE_MIN, RESOURCE_PANE_MAX) : 360
+    return Number.isFinite(saved) ? clamp(saved, RESOURCE_PANE_MIN, RESOURCE_PANE_MAX) : RESOURCE_PANE_DEFAULT
   })
 
   useEffect(() => {
@@ -1168,7 +1355,7 @@ function ResourceWorkspace({ list, detail }: { list: ReactNode; detail: ReactNod
     const handleResize = () => {
       const workspace = workspaceRef.current
       if (!workspace || window.innerWidth <= 1080) return
-      const maxWidth = Math.min(RESOURCE_PANE_MAX, workspace.clientWidth - 320)
+      const maxWidth = Math.min(RESOURCE_PANE_MAX, workspace.clientWidth - 280)
       setListWidth((current: number) => clamp(current, RESOURCE_PANE_MIN, maxWidth))
     }
 
@@ -1186,7 +1373,7 @@ function ResourceWorkspace({ list, detail }: { list: ReactNode; detail: ReactNod
     const workspaceRect = workspace.getBoundingClientRect()
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
-      const maxWidth = Math.min(RESOURCE_PANE_MAX, workspace.clientWidth - 320)
+      const maxWidth = Math.min(RESOURCE_PANE_MAX, workspace.clientWidth - 280)
       const nextWidth = clamp(moveEvent.clientX - workspaceRect.left, RESOURCE_PANE_MIN, maxWidth)
       setListWidth(nextWidth)
     }
@@ -1205,7 +1392,7 @@ function ResourceWorkspace({ list, detail }: { list: ReactNode; detail: ReactNod
     <section
       ref={workspaceRef}
       className="resource-workspace"
-      style={{ gridTemplateColumns: `${listWidth}px 10px minmax(0, 1fr)` }}
+      style={{ gridTemplateColumns: `${listWidth}px 1px minmax(0, 1fr)` }}
     >
       {list}
       <div
@@ -1264,8 +1451,8 @@ function ContainerDetailPane({
 
   return (
     <>
-      <DetailHeader title={item.name} subtitle={item.image} />
       <DetailTabs
+        title={item.name}
         tabs={[
           { key: 'info', label: 'Info' },
           { key: 'logs', label: 'Logs' },
@@ -1363,8 +1550,12 @@ function ImageDetailPane({ item, selectedTab, inspectData, inspectLoading, inspe
 
   return (
     <>
-      <DetailHeader title={item.primaryTag || '<untagged>'} subtitle={shortenId(item.id)} />
-      <DetailTabs tabs={[{ key: 'info', label: 'Info' }, { key: 'inspect', label: 'Inspect' }]} selectedTab={normalizeBasicDetailTab(selectedTab)} onSelect={onSelectTab} />
+      <DetailTabs
+        title={item.primaryTag || '<untagged>'}
+        tabs={[{ key: 'info', label: 'Info' }, { key: 'inspect', label: 'Inspect' }]}
+        selectedTab={normalizeBasicDetailTab(selectedTab)}
+        onSelect={onSelectTab}
+      />
       {selectedTab === 'inspect' ? (
         <InspectPanel data={inspectData} loading={inspectLoading} error={inspectError} />
       ) : (
@@ -1405,8 +1596,12 @@ function VolumeDetailPane({ item, selectedTab, inspectData, inspectLoading, insp
 
   return (
     <>
-      <DetailHeader title={item.name} subtitle={item.driver} />
-      <DetailTabs tabs={[{ key: 'info', label: 'Info' }, { key: 'inspect', label: 'Inspect' }]} selectedTab={normalizeBasicDetailTab(selectedTab)} onSelect={onSelectTab} />
+      <DetailTabs
+        title={item.name}
+        tabs={[{ key: 'info', label: 'Info' }, { key: 'inspect', label: 'Inspect' }]}
+        selectedTab={normalizeBasicDetailTab(selectedTab)}
+        onSelect={onSelectTab}
+      />
       {selectedTab === 'inspect' ? (
         <InspectPanel data={inspectData} loading={inspectLoading} error={inspectError} />
       ) : (
@@ -1444,8 +1639,12 @@ function NetworkDetailPane({ item, selectedTab, inspectData, inspectLoading, ins
 
   return (
     <>
-      <DetailHeader title={item.name} subtitle={shortenId(item.id)} />
-      <DetailTabs tabs={[{ key: 'info', label: 'Info' }, { key: 'inspect', label: 'Inspect' }]} selectedTab={normalizeBasicDetailTab(selectedTab)} onSelect={onSelectTab} />
+      <DetailTabs
+        title={item.name}
+        tabs={[{ key: 'info', label: 'Info' }, { key: 'inspect', label: 'Inspect' }]}
+        selectedTab={normalizeBasicDetailTab(selectedTab)}
+        onSelect={onSelectTab}
+      />
       {selectedTab === 'inspect' ? (
         <InspectPanel data={inspectData} loading={inspectLoading} error={inspectError} />
       ) : (
@@ -1480,25 +1679,32 @@ function NetworkDetailPane({ item, selectedTab, inspectData, inspectLoading, ins
   )
 }
 
-function DetailHeader({ title, subtitle }: { title: string; subtitle: string }) {
+function DetailTabs({
+  tabs,
+  selectedTab,
+  onSelect,
+  title,
+}: {
+  tabs: Array<{ key: DetailTab; label: string }>
+  selectedTab: DetailTab
+  onSelect: (tab: DetailTab) => void
+  title?: string
+}) {
   return (
-    <header className="detail-header">
-      <div>
-        <h3>{title}</h3>
+    <div className="detail-tabs-bar">
+      {title ? <span className="detail-title-chip" title={title}>{title}</span> : null}
+      <div className="detail-tabs">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            className={tab.key === selectedTab ? 'detail-tab active' : 'detail-tab'}
+            onClick={() => onSelect(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
-      <span className="detail-subtitle">{subtitle}</span>
-    </header>
-  )
-}
-
-function DetailTabs({ tabs, selectedTab, onSelect }: { tabs: Array<{ key: DetailTab; label: string }>; selectedTab: DetailTab; onSelect: (tab: DetailTab) => void }) {
-  return (
-    <div className="detail-tabs">
-      {tabs.map((tab) => (
-        <button key={tab.key} type="button" className={tab.key === selectedTab ? 'detail-tab active' : 'detail-tab'} onClick={() => onSelect(tab.key)}>
-          {tab.label}
-        </button>
-      ))}
     </div>
   )
 }
@@ -2173,6 +2379,28 @@ function LatestIcon() {
 
 function CopyIcon() {
   return <IconFrame path="M9 9V5h10v12h-4M5 9h10v10H5z" />
+}
+
+function RefreshIcon() {
+  return <IconFrame path="M4 12a8 8 0 0 1 13.7-5.6M20 12a8 8 0 0 1-13.7 5.6M17 4v4h-4M7 20v-4h4" />
+}
+
+function SearchIcon() {
+  return (
+    <svg className="list-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m16 16 4 4" />
+    </svg>
+  )
+}
+
+function ProjectIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5v-7Z" />
+      <path d="M12 12 4 8.5M12 12l8-3.5M12 12v8" />
+    </svg>
+  )
 }
 
 function IconFrame({ path }: { path: string }) {
