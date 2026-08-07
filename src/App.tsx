@@ -483,8 +483,6 @@ function App() {
               key={item.key}
               type="button"
               className={resource === item.key ? 'rail-item active' : 'rail-item'}
-              title={item.label}
-              aria-label={item.label}
               aria-current={resource === item.key ? 'page' : undefined}
               onClick={() => {
                 setResource(item.key)
@@ -493,7 +491,10 @@ function App() {
                 setDetailTab('info')
               }}
             >
-              <ResourceNavIcon resource={item.key} />
+              <span className="rail-item-icon" aria-hidden="true">
+                <ResourceNavIcon resource={item.key} />
+              </span>
+              <span className="rail-item-label">{item.label}</span>
               {counts[item.key] > 0 ? <span className="rail-item-count">{counts[item.key]}</span> : null}
             </button>
           ))}

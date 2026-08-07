@@ -28,7 +28,7 @@
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 10px;
-  --rail-width: 56px;
+  --rail-width: 168px;
   color: var(--text);
   background: var(--bg);
   font: 13px/1.4 var(--sans);

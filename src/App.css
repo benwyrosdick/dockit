@@ -13,9 +13,9 @@
 .icon-rail {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   gap: 0.35rem;
-  padding: 0.65rem 0.4rem 0.75rem;
+  padding: 0.7rem 0.55rem 0.75rem;
   background: var(--bg-rail);
   border-right: 1px solid var(--border);
   -webkit-app-region: drag;
@@ -26,7 +26,7 @@
   place-items: center;
   width: 34px;
   height: 34px;
-  margin-bottom: 0.45rem;
+  margin: 0 0 0.35rem 0.35rem;
   border-radius: 9px;
   background: linear-gradient(160deg, #3d8bfd, #1a5fc9);
   color: #fff;
@@ -39,8 +39,8 @@
 .rail-nav {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
+  align-items: stretch;
+  gap: 0.15rem;
   width: 100%;
   -webkit-app-region: no-drag;
 }
@@ -48,18 +48,20 @@
 .rail-item {
   position: relative;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
-  gap: 0.15rem;
-  width: 44px;
-  height: 44px;
-  padding: 0;
+  justify-content: flex-start;
+  gap: 0.55rem;
+  width: 100%;
+  min-height: 34px;
+  height: auto;
+  padding: 0.4rem 0.5rem 0.4rem 0.45rem;
   border: 0;
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--muted);
   box-shadow: none;
+  text-align: left;
 }
 
 .rail-item:hover {
@@ -77,35 +79,57 @@
 .rail-item.active::before {
   content: '';
   position: absolute;
-  left: -6px;
+  left: -4px;
   top: 50%;
   width: 3px;
-  height: 16px;
+  height: 14px;
   border-radius: 999px;
   background: var(--accent);
   transform: translateY(-50%);
 }
 
+.rail-item-icon {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.rail-item-icon svg,
 .rail-item svg {
   width: 18px;
   height: 18px;
+  display: block;
+}
+
+.rail-item-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: inherit;
 }
 
 .rail-item-count {
-  position: absolute;
-  top: 4px;
-  right: 2px;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 3px;
+  position: static;
+  min-width: 1.35rem;
+  height: 1.15rem;
+  padding: 0 0.35rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text-secondary);
-  font-size: 0.58rem;
+  font-size: 0.68rem;
   font-weight: 600;
-  line-height: 14px;
+  line-height: 1.15rem;
   text-align: center;
   font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
 }
 
 .rail-item.active .rail-item-count {
@@ -116,17 +140,18 @@
 .rail-footer {
   margin-top: auto;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   gap: 0.5rem;
+  padding: 0.25rem 0.35rem;
   -webkit-app-region: no-drag;
 }
 
 .rail-status {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border);
@@ -1349,6 +1374,7 @@
 
   .icon-rail {
     flex-direction: row;
+    align-items: center;
     width: 100%;
     height: auto;
     padding: 0.4rem 0.5rem;
@@ -1357,19 +1383,33 @@
     overflow-x: auto;
   }
 
+  .rail-brand {
+    margin: 0 0.35rem 0 0;
+    flex-shrink: 0;
+  }
+
   .rail-nav {
     flex-direction: row;
+    width: auto;
+    flex: 1;
+  }
+
+  .rail-item {
+    width: auto;
+    min-width: max-content;
+    padding: 0.35rem 0.55rem;
   }
 
   .rail-footer {
     margin-top: 0;
     margin-left: auto;
+    flex-shrink: 0;
   }
 
   .rail-item.active::before {
     left: 50%;
     top: auto;
-    bottom: -4px;
+    bottom: -2px;
     width: 16px;
     height: 3px;
     transform: translateX(-50%);
