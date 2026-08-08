@@ -2351,11 +2351,19 @@ function PauseIcon() {
 }
 
 function PlayIcon() {
-  return <IconFrame path="M9 7.5v9l7-4.5-7-4.5Z" />
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="action-icon" fill="currentColor">
+      <path d="M9 7.2v9.6l7.5-4.8L9 7.2Z" />
+    </svg>
+  )
 }
 
 function StopIcon() {
-  return <IconFrame path="M8 8h8v8H8z" />
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="action-icon" fill="currentColor">
+      <rect x="7.5" y="7.5" width="9" height="9" rx="1.2" />
+    </svg>
+  )
 }
 
 function RestartIcon() {

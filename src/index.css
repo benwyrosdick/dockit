@@ -31,7 +31,7 @@
   --rail-width: 168px;
   color: var(--text);
   background: var(--bg);
-  font: 13px/1.4 var(--sans);
+  font: 16px/1.4 var(--sans);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
